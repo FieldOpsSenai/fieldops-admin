@@ -192,9 +192,9 @@ export default function LoginPage() {
         <div className="mt-6 pt-5 border-t border-slate-100 space-y-2">
           <div className="flex items-center gap-1.5 text-slate-400 text-xs font-semibold uppercase tracking-wider">
             <KeyRound size={14} />
-            <span>Contas de Demonstração (API Java):</span>
+            <span>Conta de Demonstração do Administrador (API Java):</span>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <button
               type="button"
               onClick={() => handleQuickFill('admin@fieldops.com', '123456')}
@@ -202,15 +202,6 @@ export default function LoginPage() {
             >
               <div className="font-bold text-slate-800">Administrador</div>
               <div className="text-[11px] text-slate-500 truncate">admin@fieldops.com</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickFill('tecnico@fieldops.com', '123456')}
-              className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-left transition-colors text-xs"
-            >
-              <div className="font-bold text-slate-800">Técnico em Campo</div>
-              <div className="text-[11px] text-slate-500 truncate">tecnico@fieldops.com</div>
             </button>
           </div>
         </div>
