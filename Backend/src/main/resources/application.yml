@@ -1,0 +1,49 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: fieldops-api
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:mem:fieldops_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER:org.h2.Driver}
+    username: ${SPRING_DATASOURCE_USERNAME:sa}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    defer-datasource-initialization: true # Libera a execução do import.sql após a criação/atualização das tabelas
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+api:
+  security:
+    token:
+      secret: ${JWT_SECRET:fieldops_secret_key_para_desenvolvimento_123456789}
+
+# Configurações do Swagger/OpenAPI
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
+    try-it-out-enabled: true
+    filter: true
+    display-request-duration: true
+    use-root-path: true
+  show-actuator: true
+  packages-to-scan: br.com.fieldops.api.presentation.controller
+  paths-to-match: /api/**
