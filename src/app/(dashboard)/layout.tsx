@@ -1,11 +1,29 @@
-import React from 'react';
+"use client";
+
+import React, { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/layout/Sidebar';
+import { useSessionStore } from '@/stores/sessionStore';
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const router = useRouter();
+  const session = useSessionStore((state) => state.session);
+
+  useEffect(() => {
+    if (session?.profile === 'TECNICO') {
+      useSessionStore.getState().clearSession();
+      router.replace('/login');
+    }
+  }, [router, session]);
+
+  if (session?.profile === 'TECNICO') {
+    return null;
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--background)]">
       {/* Sidebar */}

@@ -44,10 +44,16 @@ export default function LoginPage() {
     setErrorMessage(null);
 
     try {
-      await authService.login({
+      const response = await authService.login({
         email: email.trim(),
         senha: password,
       });
+
+      if (response.perfil === 'TECNICO') {
+        useSessionStore.getState().clearSession();
+        setErrorMessage('Esta interface é exclusiva para administradores e supervisores.');
+        return;
+      }
 
       // Honor redirect param or go to dashboard
       const redirectTo = searchParams.get('redirect') || '/';
