@@ -1,7 +1,15 @@
+/* eslint-disable react-hooks/immutability */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import TopHeader from '@/components/layout/TopHeader';
+import { usePathname, useRouter } from 'next/navigation';
+import { useSessionStore } from '@/stores/sessionStore';
+import {
+  canManageUsers,
+} from '@/lib/auth/permissions';
 import { 
   Plus, 
   Building2, 
@@ -33,8 +41,45 @@ import { Profile } from '@/types';
 
 type ActiveTab = 'CLIENTES' | 'LOCAIS' | 'EQUIPAMENTOS' | 'USUARIOS';
 
+function getTabFromPathname(pathname: string): ActiveTab {
+  if (pathname.startsWith('/users')) {
+    return 'USUARIOS';
+  }
+
+  if (pathname.startsWith('/sites')) {
+    return 'LOCAIS';
+  }
+
+  if (pathname.startsWith('/equipment')) {
+    return 'EQUIPAMENTOS';
+  }
+
+  return 'CLIENTES';
+}
+
 export default function MasterDataPage() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('CLIENTES');
+  const pathname = usePathname();
+const router = useRouter();
+const { session } = useSessionStore();
+
+const [activeTab, setActiveTab] = useState<ActiveTab>(
+  getTabFromPathname(pathname)
+);
+
+const userCanManageUsers = canManageUsers(session?.profile);
+
+useEffect(() => {
+  const nextTab = getTabFromPathname(pathname);
+
+  if (nextTab === 'USUARIOS' && !userCanManageUsers) {
+    router.replace('/forbidden');
+    return;
+  }
+
+  setActiveTab(nextTab);
+  setSearchTerm('');
+}, [pathname, router, userCanManageUsers]);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -94,7 +139,7 @@ export default function MasterDataPage() {
       if (lRes.status === 'fulfilled') setLocais(lRes.value);
       if (eRes.status === 'fulfilled') setEquipamentos(eRes.value);
       if (uRes.status === 'fulfilled') setUsuarios(uRes.value);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching master data:', err);
       setErrorMessage('Erro ao carregar dados mestres da API.');
     } finally {
@@ -299,17 +344,22 @@ export default function MasterDataPage() {
             Equipamentos ({equipamentos.length})
           </button>
 
-          <button
-            onClick={() => { setActiveTab('USUARIOS'); setSearchTerm(''); }}
-            className={`flex items-center gap-2 pb-3 text-sm font-bold border-b-2 transition-all cursor-pointer ${
-              activeTab === 'USUARIOS'
-                ? 'text-[#0f766e] border-[#0f766e]'
-                : 'text-slate-500 border-transparent hover:text-slate-800'
-            }`}
-          >
-            <Users size={16} />
-            Usuários & Técnicos ({usuarios.length})
-          </button>
+          {userCanManageUsers && (
+  <button
+    onClick={() => {
+      setActiveTab('USUARIOS');
+      setSearchTerm('');
+    }}
+    className={`flex items-center gap-2 pb-3 text-sm font-bold border-b-2 transition-all cursor-pointer ${
+      activeTab === 'USUARIOS'
+        ? 'text-[#0f766e] border-[#0f766e]'
+        : 'text-slate-500 border-transparent hover:text-slate-800'
+    }`}
+  >
+    <Users size={16} />
+    Usuários & Técnicos ({usuarios.length})
+  </button>
+)}
         </div>
 
         {/* Search */}
