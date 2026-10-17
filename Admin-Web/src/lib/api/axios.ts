@@ -3,15 +3,15 @@ import { useSessionStore } from '@/stores/sessionStore';
 
 /**
  * Axios instance configured for the FieldOps Java REST API.
- * 
+ *
  * Features:
- * - BaseURL from NEXT_PUBLIC_API_URL (default: http://localhost:8080/api/v1)
+ * - BaseURL from NEXT_PUBLIC_API_URL (default: /api/v1, routed through Next.js)
  * - Automatic Authorization: Bearer <token> request interceptor
  * - Response interceptors for 401 / 403 / 5xx handling
  */
 
 const apiClient: AxiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || '/api/v1',
   timeout: 15_000,
   headers: {
     'Content-Type': 'application/json',
@@ -29,7 +29,7 @@ apiClient.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 // Response Interceptor: Handle Authentication and Server Errors
@@ -48,7 +48,7 @@ apiClient.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 export default apiClient;

@@ -18,10 +18,7 @@ import clsx from 'clsx';
 import { usePathname } from 'next/navigation';
 
 import { useSessionStore } from '@/stores/sessionStore';
-import {
-  normalizeRole,
-  type AppRole,
-} from '@/lib/auth/permissions';
+import { normalizeRole, type AppRole } from '@/lib/auth/permissions';
 
 interface NavItem {
   name: string;
@@ -63,7 +60,7 @@ const navItems: NavItem[] = [
   },
   {
     name: 'Modelos de inspeção',
-    href: '/inspection-templates',
+    href: '/templates',
     icon: FileText,
     roles: ['ADMIN', 'SUPERVISOR'],
   },
@@ -75,7 +72,7 @@ const navItems: NavItem[] = [
   },
   {
     name: 'Planejamento',
-    href: '/inspections/new',
+    href: '/scheduling',
     icon: CalendarDays,
     roles: ['SUPERVISOR'],
   },
@@ -87,9 +84,7 @@ export default function Sidebar() {
 
   const role = normalizeRole(session?.profile);
 
-  const visibleItems = navItems.filter((item) =>
-    item.roles.includes(role)
-  );
+  const visibleItems = navItems.filter((item) => item.roles.includes(role));
 
   return (
     <aside className="w-64 bg-[#526379] flex flex-col h-screen text-slate-300">
@@ -99,9 +94,7 @@ export default function Sidebar() {
         </div>
 
         <div>
-          <div className="font-bold text-lg leading-tight tracking-wide">
-            FieldOps
-          </div>
+          <div className="font-bold text-lg leading-tight tracking-wide">FieldOps</div>
 
           <div className="text-[0.65rem] text-slate-300 tracking-wider font-semibold uppercase">
             Technical Inspection
@@ -114,8 +107,7 @@ export default function Sidebar() {
           const Icon = item.icon;
 
           const isActive =
-            pathname === item.href ||
-            (item.href !== '/' && pathname.startsWith(`${item.href}/`));
+            pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`));
 
           return (
             <Link
@@ -126,7 +118,7 @@ export default function Sidebar() {
                 'transition-colors text-sm font-medium border-l-4',
                 isActive
                   ? 'bg-[#445569] text-white border-[#10b981]'
-                  : 'hover:bg-[#445569] hover:text-white border-transparent'
+                  : 'hover:bg-[#445569] hover:text-white border-transparent',
               )}
             >
               <Icon size={18} />
