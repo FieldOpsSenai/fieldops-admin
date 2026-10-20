@@ -41,21 +41,9 @@ const navItems: NavItem[] = [
     roles: ['ADMIN'],
   },
   {
-    name: 'Clientes',
+    name: 'Clientes & Ativos',
     href: '/clients',
     icon: Building2,
-    roles: ['ADMIN', 'SUPERVISOR'],
-  },
-  {
-    name: 'Locais',
-    href: '/sites',
-    icon: MapPin,
-    roles: ['ADMIN', 'SUPERVISOR'],
-  },
-  {
-    name: 'Equipamentos',
-    href: '/equipment',
-    icon: Wrench,
     roles: ['ADMIN', 'SUPERVISOR'],
   },
   {
@@ -107,7 +95,10 @@ export default function Sidebar() {
           const Icon = item.icon;
 
           const isActive =
-            pathname === item.href || (item.href !== '/' && pathname.startsWith(`${item.href}/`));
+            pathname === item.href ||
+            (item.href !== '/' && pathname.startsWith(`${item.href}/`)) ||
+            (item.href === '/clients' &&
+              (pathname.startsWith('/sites') || pathname.startsWith('/equipment') || pathname.startsWith('/settings')));
 
           return (
             <Link

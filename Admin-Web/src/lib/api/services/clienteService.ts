@@ -35,4 +35,9 @@ export const clienteService = {
   async inativar(id: number): Promise<void> {
     await apiClient.delete(`/clientes/${id}`);
   },
+
+  async atualizar(id: number, data: ClienteRequest): Promise<ClienteDTO> {
+    const response = await apiClient.put<ClienteDTO>(`/clientes/${id}`, data);
+    return response.data;
+  },
 };

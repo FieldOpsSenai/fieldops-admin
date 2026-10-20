@@ -30,4 +30,13 @@ export const localService = {
     const response = await apiClient.post<LocalDTO>('/locais', data);
     return response.data;
   },
+
+  async atualizar(id: number, data: LocalRequest): Promise<LocalDTO> {
+    const response = await apiClient.put<LocalDTO>(`/locais/${id}`, data);
+    return response.data;
+  },
+
+  async inativar(id: number): Promise<void> {
+    await apiClient.delete(`/locais/${id}`);
+  },
 };
