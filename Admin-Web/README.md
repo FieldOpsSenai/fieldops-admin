@@ -18,7 +18,7 @@ O `fieldops-admin` é responsável pela interface web utilizada por administrado
 
 ## Stack
 
-- Next.js
+- Next.js com React
 - TypeScript
 - Tailwind CSS
 
@@ -30,15 +30,76 @@ O `fieldops-admin` é responsável pela interface web utilizada por administrado
 
 ## Desenvolvimento
 
-### Conectar à API local
+### Requisitos
 
-1. Inicie o `fieldops-api` com o PostgreSQL configurado. A API deve estar disponível em `http://localhost:8080`.
-2. O Next.js encaminha `/api/v1/*` para `http://localhost:8080/api/v1/*`. Copie `.env.example` para `.env.local` apenas se precisar mudar a URL base usada pelo Admin-Web.
-3. Instale as dependências e inicie o Admin-Web com `npm install` e `npm run dev`. Por padrão, o Next.js ficará disponível em `http://localhost:3000`.
+- Node.js e npm instalados.
+- API Java FieldOps em execução. Por padrão, o painel encaminha chamadas para `http://localhost:8080`.
 
-O cliente HTTP usa o proxy do Next.js e envia o JWT no cabeçalho `Authorization: Bearer`. A URL base pode ser alterada pela variável pública `NEXT_PUBLIC_API_URL`. As rotas e os formatos usados pelos serviços do Admin-Web seguem o contrato documentado no repositório `fieldops-api`; a autorização final continua sendo aplicada pela API.
+### Instalação e execução
 
-O contrato atual permite consultar e cadastrar clientes, locais, equipamentos, usuários e inspeções, além de inativar clientes e usuários. Recursos sem endpoint correspondente na API não são simulados pelo Admin-Web.
+Na pasta `Admin-Web/`, instale as dependências:
+
+```bash
+npm ci
+```
+
+Copie o arquivo de exemplo para a configuração local:
+
+```bash
+# macOS/Linux
+cp .env.example .env.local
+```
+
+```powershell
+# Windows PowerShell
+Copy-Item .env.example .env.local
+```
+
+Ajuste `.env.local` se a API estiver em outro endereço. Inicie o painel:
+
+```bash
+npm run dev
+```
+
+Abra [http://localhost:3000](http://localhost:3000). A API deve estar acessível pelo endereço configurado em `FIELDOPS_API_URL`.
+
+### Variáveis de ambiente
+
+| Variável              | Padrão                  | Uso                                                                 |
+| --------------------- | ----------------------- | ------------------------------------------------------------------- |
+| `NEXT_PUBLIC_API_URL` | `/api/v1`               | Caminho usado pelo navegador e encaminhado ao backend pelo Next.js. |
+| `FIELDOPS_API_URL`    | `http://localhost:8080` | Origem da API Java; a rota proxy acrescenta `/api/v1`. |
+| `FIELDOPS_API_INTERNAL_URL` | Opcional | URL completa da API, incluindo `/api/v1`; tem prioridade sobre `FIELDOPS_API_URL`. |
+
+Não versione `.env.local`; o arquivo está ignorado pelo Git. `.env.example` contém somente valores locais de exemplo.
+
+O cliente HTTP envia o JWT no cabeçalho `Authorization: Bearer`. A rota `src/app/api/v1/[...path]/route.ts` encaminha as requisições e preserva o status retornado pela API. A autorização final continua sendo aplicada pelo backend.
+
+### Comandos
+
+| Comando                | Ação                                          |
+| ---------------------- | --------------------------------------------- |
+| `npm run dev`          | Inicia o servidor de desenvolvimento.         |
+| `npm run build`        | Gera a versão de produção.                    |
+| `npm run start`        | Inicia a versão de produção já compilada.     |
+| `npm run lint`         | Executa o ESLint.                             |
+| `npm run format`       | Formata os arquivos suportados pelo Prettier. |
+| `npm run format:check` | Verifica a formatação sem alterar arquivos.   |
+| `npm test`             | Executa os testes Jest.                       |
+
+O Prettier está fixado em `package.json` e `package-lock.json`. `.prettierignore` exclui dependências, artefatos gerados e o lockfile.
+
+### Estrutura
+
+- `src/app/(auth)/`: páginas de autenticação.
+- `src/app/(dashboard)/`: layout protegido e rotas do painel, incluindo inspeções, relatórios, planejamento, configurações, suporte e modelos.
+- `src/components/`: componentes de layout, autenticação, UI e elementos compartilhados.
+- `src/lib/api/`: cliente HTTP e serviços de acesso à API.
+- `src/lib/auth/`: regras de autenticação e permissões.
+- `src/stores/`: estado de sessão.
+- `src/types/`: tipos compartilhados.
+
+As rotas `/clients`, `/sites` e `/equipment` reutilizam `ClientsHierarchyManager`, com navegação paginada entre clientes, locais e equipamentos. `/settings` redireciona para `/clients`; `/users` mantém sua tela própria de gerenciamento. O dashboard fica em `/dashboard`, os modelos em `/inspection-templates` e o agendamento em `/inspections/new`.
 
 ## Convenções
 
@@ -76,4 +137,4 @@ Consulte `docs/CONTRIBUTING.md` para as regras completas de contribuição.
 
 ## Status
 
-Repositório em configuração inicial.
+O painel possui estrutura Next.js, rotas administrativas, autenticação, integração com a API Java e ferramentas de lint e formatação.

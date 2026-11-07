@@ -6,7 +6,7 @@ type RouteContext = {
 
 const apiBaseUrl = (
   process.env.FIELDOPS_API_INTERNAL_URL ??
-  'http://localhost:8080/api/v1'
+  `${(process.env.FIELDOPS_API_URL || 'http://localhost:8080').replace(/\/+$/, '')}/api/v1`
 ).replace(/\/+$/, '');
 
 async function proxyToApi(

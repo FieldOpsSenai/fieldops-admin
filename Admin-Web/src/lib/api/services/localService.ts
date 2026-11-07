@@ -66,4 +66,13 @@ export const localService = {
     });
     return fromApiSite(response.data);
   },
+
+  async atualizar(id: number, data: LocalRequest): Promise<LocalDTO> {
+    const response = await apiClient.put<LocalDTO>(`/locais/${id}`, data);
+    return response.data;
+  },
+
+  async inativar(id: number): Promise<void> {
+    await apiClient.delete(`/locais/${id}`);
+  },
 };

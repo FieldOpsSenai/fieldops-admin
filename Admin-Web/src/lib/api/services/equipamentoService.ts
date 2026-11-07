@@ -68,4 +68,13 @@ export const equipamentoService = {
     });
     return fromApiEquipment(response.data);
   },
+
+  async atualizar(id: number, data: EquipamentoRequest): Promise<EquipamentoDTO> {
+    const response = await apiClient.put<EquipamentoDTO>(`/equipamentos/${id}`, data);
+    return response.data;
+  },
+
+  async inativar(id: number): Promise<void> {
+    await apiClient.delete(`/equipamentos/${id}`);
+  },
 };

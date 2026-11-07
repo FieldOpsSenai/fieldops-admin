@@ -9,11 +9,9 @@ import {
   FileText,
   HelpCircle,
   LayoutDashboard,
-  MapPin,
   MapPinned,
   Menu,
   Users,
-  Wrench,
   X,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -46,21 +44,9 @@ const navItems: NavItem[] = [
     roles: ['ADMIN', 'SUPERVISOR'],
   },
   {
-    name: 'Clientes',
+    name: 'Clientes & Ativos',
     href: '/clients',
     icon: Building2,
-    roles: ['ADMIN', 'SUPERVISOR'],
-  },
-  {
-    name: 'Locais',
-    href: '/sites',
-    icon: MapPin,
-    roles: ['ADMIN', 'SUPERVISOR'],
-  },
-  {
-    name: 'Equipamentos',
-    href: '/equipment',
-    icon: Wrench,
     roles: ['ADMIN', 'SUPERVISOR'],
   },
   {
@@ -87,7 +73,13 @@ function isNavItemActive(
   pathname: string,
   href: string
 ) {
-if (href === '/inspections/new') {
+  if (href === '/clients') {
+    return ['/clients', '/sites', '/equipment', '/settings'].some(
+      (path) => pathname === path || pathname.startsWith(`${path}/`)
+    );
+  }
+
+  if (href === '/inspections/new') {
     return pathname === '/inspections/new';
   }
 
