@@ -1,30 +1,34 @@
 import { NextRequest } from 'next/server';
+import { ACCESS_COOKIE, apiBaseUrl, isSameOrigin } from '@/lib/auth/serverSession';
 
 type RouteContext = {
   params: Promise<{ path: string[] }>;
 };
-
-const apiBaseUrl = (
-  process.env.FIELDOPS_API_INTERNAL_URL ??
-  `${(process.env.FIELDOPS_API_URL || 'http://localhost:8080').replace(/\/+$/, '')}/api/v1`
-).replace(/\/+$/, '');
 
 async function proxyToApi(
   request: NextRequest,
   { params }: RouteContext
 ) {
   const { path } = await params;
+  if (!['GET', 'HEAD'].includes(request.method) && !isSameOrigin(request)) {
+    return Response.json({ message: 'Origem não permitida.' }, { status: 403 });
+  }
+  if (path[0] === 'auth') return Response.json({ message: 'Use a sessão da interface web.' }, { status: 404 });
   const endpoint = path.map(encodeURIComponent).join('/');
   const targetUrl = `${apiBaseUrl}/${endpoint}${request.nextUrl.search}`;
   const headers = new Headers();
 
-  for (const name of ['accept', 'authorization', 'content-type']) {
+  for (const name of ['accept', 'content-type']) {
     const value = request.headers.get(name);
 
     if (value) {
       headers.set(name, value);
     }
   }
+
+  const token = request.cookies.get(ACCESS_COOKIE)?.value;
+  if (!token) return Response.json({ message: 'Sessão expirada.' }, { status: 401 });
+  headers.set('Authorization', `Bearer ${token}`);
 
   try {
     const apiResponse = await fetch(targetUrl, {
@@ -35,6 +39,7 @@ async function proxyToApi(
           ? undefined
           : await request.arrayBuffer(),
       cache: 'no-store',
+      signal: AbortSignal.timeout(30000),
     });
     const responseHeaders = new Headers();
 
