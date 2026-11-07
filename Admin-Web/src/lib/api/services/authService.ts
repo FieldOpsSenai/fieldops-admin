@@ -9,7 +9,6 @@ export interface LoginRequest {
 
 export interface TokenResponse {
   token: string;
-  tipo?: string;
   perfil: Profile;
   nome: string;
   email: string;
@@ -17,10 +16,47 @@ export interface TokenResponse {
   expiracao?: number;
 }
 
+interface ApiUserResponse {
+  id: number;
+  name: string;
+  email: string;
+  role: 'ADMINISTRATOR' | 'SUPERVISOR' | 'TECHNICIAN';
+  status: 'ACTIVE' | 'INACTIVE' | 'BLOCKED';
+}
+
+interface ApiLoginResponse {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  user: ApiUserResponse;
+}
+
+function mapApiRole(role: ApiUserResponse['role']): Profile {
+  switch (role) {
+    case 'ADMINISTRATOR':
+      return 'ADMINISTRADOR';
+    case 'SUPERVISOR':
+      return 'SUPERVISOR';
+    case 'TECHNICIAN':
+      return 'TECNICO';
+  }
+}
+
 export const authService = {
   async login(credentials: LoginRequest): Promise<TokenResponse> {
-    const response = await apiClient.post<TokenResponse>('/auth/login', credentials);
-    const data = response.data;
+    const response = await apiClient.post<ApiLoginResponse>('/auth/login', {
+      email: credentials.email,
+      password: credentials.senha,
+    });
+    const apiData = response.data;
+    const data: TokenResponse = {
+      token: apiData.accessToken,
+      perfil: mapApiRole(apiData.user.role),
+      nome: apiData.user.name,
+      email: apiData.user.email,
+      id: String(apiData.user.id),
+      expiracao: apiData.expiresIn,
+    };
     
     // Save in zustand store and localStorage
     useSessionStore.getState().setSession(
@@ -36,8 +72,8 @@ export const authService = {
     return data;
   },
 
-  async getMe(): Promise<TokenResponse> {
-    const response = await apiClient.get<TokenResponse>('/auth/me');
+  async getMe(): Promise<ApiUserResponse> {
+    const response = await apiClient.get<ApiUserResponse>('/auth/me');
     return response.data;
   },
 

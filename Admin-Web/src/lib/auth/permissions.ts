@@ -1,8 +1,11 @@
 /**
  * Controle de autorização apenas da interface.
  *
+ * ADMIN e SUPERVISOR acessam a interface administrativa.
+ * Ações específicas podem ser restritas por perfil.
+ *
  * IMPORTANTE:
- * a API continua sendo a fonte definitiva de autorização.
+ * a API continua sendo a autoridade final.
  */
 
 export type AppRole =
@@ -12,8 +15,12 @@ export type AppRole =
   | 'CLIENT_VIEWER'
   | 'UNKNOWN';
 
-export function normalizeRole(profile?: string | null): AppRole {
-  const value = profile?.trim().toUpperCase();
+export function normalizeRole(
+  profile?: string | null
+): AppRole {
+  const value = profile
+    ?.trim()
+    .toUpperCase();
 
   switch (value) {
     case 'ADMIN':
@@ -37,34 +44,58 @@ export function normalizeRole(profile?: string | null): AppRole {
   }
 }
 
-export function canAccessAdminWeb(profile?: string | null): boolean {
-  const role = normalizeRole(profile);
+function isAdministrativeRole(
+  profile?: string | null
+): boolean {
+  const role =
+    normalizeRole(profile);
 
-  return role === 'ADMIN' || role === 'SUPERVISOR';
+  return (
+    role === 'ADMIN' ||
+    role === 'SUPERVISOR'
+  );
 }
 
-export function canManageUsers(profile?: string | null): boolean {
-  return normalizeRole(profile) === 'ADMIN';
+export function canAccessAdminWeb(
+  profile?: string | null
+): boolean {
+  return isAdministrativeRole(
+    profile
+  );
 }
 
-export function canManageMasterData(profile?: string | null): boolean {
-  const role = normalizeRole(profile);
-
-  return role === 'ADMIN' || role === 'SUPERVISOR';
+export function canManageUsers(
+  profile?: string | null
+): boolean {
+  return isAdministrativeRole(profile);
 }
 
-export function canManageTemplates(profile?: string | null): boolean {
-  const role = normalizeRole(profile);
-
-  return role === 'ADMIN' || role === 'SUPERVISOR';
+export function canManageMasterData(
+  profile?: string | null
+): boolean {
+  return isAdministrativeRole(
+    profile
+  );
 }
 
-export function canPlanInspections(profile?: string | null): boolean {
-  const role = normalizeRole(profile);
-
-  return role === 'ADMIN' || role === 'SUPERVISOR';
+export function canManageTemplates(
+  profile?: string | null
+): boolean {
+  return isAdministrativeRole(
+    profile
+  );
 }
 
-export function canReviewInspections(profile?: string | null): boolean {
-  return normalizeRole(profile) === 'SUPERVISOR';
+export function canPlanInspections(
+  profile?: string | null
+): boolean {
+  return isAdministrativeRole(
+    profile
+  );
+}
+
+export function canReviewInspections(
+  profile?: string | null
+): boolean {
+  return isAdministrativeRole(profile);
 }

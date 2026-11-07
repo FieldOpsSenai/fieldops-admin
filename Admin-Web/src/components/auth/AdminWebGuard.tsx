@@ -1,49 +1,99 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import React, {
+  useEffect,
+} from 'react';
 
-import { useSessionStore } from '@/stores/sessionStore';
-import { canAccessAdminWeb } from '@/lib/auth/permissions';
+import {
+  Loader2,
+} from 'lucide-react';
+
+import {
+  useRouter,
+} from 'next/navigation';
+
+import {
+  useSessionStore,
+} from '@/stores/sessionStore';
+
+import {
+  canAccessAdminWeb,
+} from '@/lib/auth/permissions';
 
 export default function AdminWebGuard({
   children,
 }: {
-  children: React.ReactNode;
+  children:
+    React.ReactNode;
 }) {
-  const router = useRouter();
+  const router =
+    useRouter();
 
-  const {
-    session,
+  const session =
+    useSessionStore(
+      (state) =>
+        state.session
+    );
+
+  const isInitialized =
+    useSessionStore(
+      (state) =>
+        state.isInitialized
+    );
+
+  const initializeFromStorage =
+    useSessionStore(
+      (state) =>
+        state.initializeFromStorage
+    );
+
+  useEffect(() => {
+    if (
+      !isInitialized
+    ) {
+      initializeFromStorage();
+    }
+  }, [
     initializeFromStorage,
-  } = useSessionStore();
-
-  const [isReady, setIsReady] = useState(false);
-
-  useEffect(() => {
-    initializeFromStorage();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsReady(true);
-  }, [initializeFromStorage]);
+    isInitialized,
+  ]);
 
   useEffect(() => {
-    if (!isReady) return;
-
-    if (!session) {
-      router.replace('/login');
+    if (
+      !isInitialized
+    ) {
       return;
     }
 
-    if (!canAccessAdminWeb(session.profile)) {
-      router.replace('/forbidden');
+    if (!session) {
+      router.replace(
+        '/login'
+      );
+
+      return;
     }
-  }, [isReady, router, session]);
+
+    if (
+      !canAccessAdminWeb(
+        session.profile
+      )
+    ) {
+      router.replace(
+        '/forbidden'
+      );
+    }
+  }, [
+    isInitialized,
+    router,
+    session,
+  ]);
 
   if (
-    !isReady ||
+    !isInitialized ||
     !session ||
-    !canAccessAdminWeb(session.profile)
+    !canAccessAdminWeb(
+      session.profile
+    )
   ) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -59,5 +109,9 @@ export default function AdminWebGuard({
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+    </>
+  );
 }
