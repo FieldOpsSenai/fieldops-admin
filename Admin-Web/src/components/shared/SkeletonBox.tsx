@@ -5,6 +5,7 @@ export interface SkeletonBoxProps {
   width?: string | number;
   height?: string | number;
   className?: string;
+  'data-testid'?: string;
 }
 
 /**
@@ -12,7 +13,15 @@ export interface SkeletonBoxProps {
  * Displays a smooth shimmer animation to indicate loading state
  */
 const SkeletonBox = React.forwardRef<HTMLDivElement, SkeletonBoxProps>(
-  ({ width = '100%', height = '16px', className }, ref) => {
+  (
+    {
+      width = '100%',
+      height = '16px',
+      className,
+      'data-testid': testId = 'skeleton-box',
+    },
+    ref
+  ) => {
     const widthClass = typeof width === 'number' ? `w-[${width}px]` : width;
     const heightClass = typeof height === 'number' ? `h-[${height}px]` : height;
 
@@ -26,7 +35,7 @@ const SkeletonBox = React.forwardRef<HTMLDivElement, SkeletonBoxProps>(
           heightClass,
           className
         )}
-        data-testid="skeleton-box"
+        data-testid={testId}
         role="status"
         aria-label="Loading content"
       />
