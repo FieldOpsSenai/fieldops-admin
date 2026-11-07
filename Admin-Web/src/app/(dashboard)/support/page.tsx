@@ -1,19 +1,60 @@
 'use client';
 
-import React from 'react';
+import { useEffect, useState } from 'react';
+import axios from 'axios';
 import TopHeader from '@/components/layout/TopHeader';
+import apiClient from '@/lib/api/axios';
 import { 
   HelpCircle, 
   BookOpen, 
   MessageSquare, 
-  FileText, 
   ExternalLink, 
   ChevronRight, 
   Headphones,
   CheckCircle2
 } from 'lucide-react';
 
+type ApiStatus = 'checking' | 'online' | 'offline';
+
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
+const swaggerUrl = new URL('/swagger-ui.html', apiBaseUrl).toString();
+
 export default function SupportPage() {
+  const [apiStatus, setApiStatus] = useState<ApiStatus>('checking');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkApi = async () => {
+      try {
+        await apiClient.get('/clientes', { timeout: 3000 });
+        if (isMounted) setApiStatus('online');
+      } catch (error: unknown) {
+        if (!isMounted) return;
+        setApiStatus(axios.isAxiosError(error) && error.response ? 'online' : 'offline');
+      }
+    };
+
+    void checkApi();
+    const interval = setInterval(checkApi, 30000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const apiStatusLabel = {
+    checking: 'Verificando…',
+    online: 'Online',
+    offline: 'Offline',
+  }[apiStatus];
+  const apiStatusClasses = {
+    checking: 'bg-amber-50 text-amber-700',
+    online: 'bg-emerald-50 text-emerald-700',
+    offline: 'bg-red-50 text-red-700',
+  }[apiStatus];
+
   return (
     <>
       <TopHeader 
@@ -50,7 +91,7 @@ export default function SupportPage() {
               Consulte os endpoints REST, contratos JSON de inspeções, clientes e equipamentos.
             </p>
             <a 
-              href="http://localhost:8080/swagger-ui.html" 
+              href={swaggerUrl}
               target="_blank" 
               rel="noreferrer"
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0f766e] hover:underline"
@@ -97,17 +138,17 @@ export default function SupportPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
             <div className="p-3 bg-slate-50 rounded border border-slate-200 flex items-center justify-between">
               <span className="text-slate-700 font-medium">Backend REST API</span>
-              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-bold rounded">Online (8080)</span>
+              <span className={`px-2 py-0.5 font-bold rounded ${apiStatusClasses}`}>{apiStatusLabel}</span>
             </div>
 
             <div className="p-3 bg-slate-50 rounded border border-slate-200 flex items-center justify-between">
               <span className="text-slate-700 font-medium">Banco de Dados PostgreSQL</span>
-              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-bold rounded">Conectado</span>
+              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 font-bold rounded">Status não exposto pela API</span>
             </div>
 
             <div className="p-3 bg-slate-50 rounded border border-slate-200 flex items-center justify-between">
               <span className="text-slate-700 font-medium">Serviço de Sincronismo</span>
-              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-bold rounded">Ativo</span>
+              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 font-bold rounded">Status não exposto pela API</span>
             </div>
           </div>
         </div>
