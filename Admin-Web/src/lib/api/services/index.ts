@@ -4,3 +4,4 @@ export * from './localService';
 export * from './equipamentoService';
 export * from './usuarioService';
 export * from './inspecaoService';
+export * from './modeloInspecaoService';
