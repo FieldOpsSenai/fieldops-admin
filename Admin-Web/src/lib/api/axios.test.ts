@@ -3,7 +3,7 @@
  * 
  * These tests verify that the Axios instance is properly configured with:
  * - Correct baseURL and timeout
- * - withCredentials for cookie transmission
+ * - JWT bearer authentication without cross-origin cookies
  * - Response interceptors for error handling
  */
 
@@ -21,15 +21,15 @@ jest.mock('@/stores/sessionStore', () => ({
 describe('Axios instance - Configuration', () => {
   test('should have baseURL from environment variable or default', () => {
     expect(apiClient.defaults.baseURL).toBeDefined();
-    // Should be either from NEXT_PUBLIC_API_URL or 'http://localhost:8080'
+    // Should be either from NEXT_PUBLIC_API_URL or the same-origin API proxy.
     const isValidBaseURL =
       apiClient.defaults.baseURL === process.env.NEXT_PUBLIC_API_URL ||
-      apiClient.defaults.baseURL === 'http://localhost:8080';
+      apiClient.defaults.baseURL === '/api/v1';
     expect(isValidBaseURL).toBe(true);
   });
 
-  test('should have withCredentials enabled for cookie transmission', () => {
-    expect(apiClient.defaults.withCredentials).toBe(true);
+  test('should not send cookies to the JWT API', () => {
+    expect(apiClient.defaults.withCredentials).not.toBe(true);
   });
 
   test('should have 30 second timeout configured', () => {
@@ -57,10 +57,15 @@ describe('Axios instance - Interceptor behavior (unit)', () => {
     expect(handlers.length).toBeGreaterThanOrEqual(1);
 
     // Each handler should have a fulfilled and/or rejected function
-    handlers.forEach((handler: any) => {
+    handlers.forEach((handler) => {
+      const typedHandler = handler as {
+        fulfilled?: unknown;
+        rejected?: unknown;
+      };
+
       expect(
-        typeof handler.fulfilled === 'function' ||
-          typeof handler.rejected === 'function'
+        typeof typedHandler.fulfilled === 'function' ||
+          typeof typedHandler.rejected === 'function'
       ).toBe(true);
     });
   });
