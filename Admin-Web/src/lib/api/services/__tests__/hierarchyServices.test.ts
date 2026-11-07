@@ -158,16 +158,17 @@ describe('Hierarchy Services (Cliente, Local, Equipamento)', () => {
         numeroSerie: 'CMP-50',
         tipo: 'Compressor',
         localId: 10,
+        qrCode: 'equipment-unique-101',
       };
       const created = { id: 101, ...payload, ativo: true };
       (apiClient.post as jest.Mock).mockResolvedValueOnce({
-        data: { id: 101, name: payload.nome, serialNumber: payload.numeroSerie, model: payload.tipo, siteId: payload.localId, status: 'ACTIVE' },
+        data: { id: 101, name: payload.nome, serialNumber: payload.numeroSerie, model: payload.tipo, siteId: payload.localId, qrCode: payload.qrCode, status: 'ACTIVE' },
       });
 
       const result = await equipamentoService.cadastrar(payload);
       expect(apiClient.post).toHaveBeenCalledWith('/equipment', {
         siteId: payload.localId, name: payload.nome, assetNumber: payload.numeroSerie, serialNumber: payload.numeroSerie,
-        model: payload.tipo, qrCode: payload.numeroSerie, status: 'ACTIVE',
+        model: payload.tipo, qrCode: payload.qrCode, status: 'ACTIVE',
       });
       expect(result).toEqual(created);
     });
