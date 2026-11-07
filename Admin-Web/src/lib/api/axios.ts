@@ -1,5 +1,6 @@
-import axios, { type AxiosError } from 'axios';
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { useSessionStore } from '@/stores/sessionStore';
+import { refreshSession } from '@/lib/auth/refreshSession';
 
 // Credentials remain in HttpOnly cookies on the web origin.
 export const API_BASE_URL = '/api/v1';
@@ -11,8 +12,13 @@ const apiClient = axios.create({
 
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
     if (typeof window !== 'undefined' && error.response?.status === 401 && !window.location.pathname.startsWith('/login')) {
+      const config = error.config as (InternalAxiosRequestConfig & { sessionRetried?: boolean }) | undefined;
+      if (config && !config.sessionRetried) {
+        config.sessionRetried = true;
+        if (await refreshSession()) return apiClient.request(config);
+      }
       useSessionStore.getState().clearSession();
       window.location.replace('/login?expired=true');
     }
