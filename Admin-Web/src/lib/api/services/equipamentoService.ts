@@ -9,6 +9,7 @@ export interface EquipamentoDTO {
   ativo: boolean;
   localId: number;
   localNome?: string;
+  qrCode?: string;
 }
 
 export interface EquipamentoRequest {
@@ -25,6 +26,11 @@ interface ApiEquipment {
   siteName?: string;
   serialNumber?: string;
   model?: string;
+  assetNumber?: string;
+  manufacturer?: string;
+  description?: string;
+  qrCode?: string;
+  installedAt?: string;
   status: 'ACTIVE' | 'INACTIVE' | 'DECOMMISSIONED';
 }
 
@@ -37,6 +43,7 @@ function fromApiEquipment(equipment: ApiEquipment): EquipamentoDTO {
     ativo: equipment.status === 'ACTIVE',
     localId: equipment.siteId,
     localNome: equipment.siteName,
+    qrCode: equipment.qrCode,
   };
 }
 
@@ -61,7 +68,6 @@ export const equipamentoService = {
       name: data.nome,
       assetNumber: data.numeroSerie,
       serialNumber: data.numeroSerie,
-      manufacturer: 'FieldOps QA',
       model: data.tipo || data.nome,
       qrCode: data.numeroSerie,
       status: 'ACTIVE',
@@ -70,11 +76,23 @@ export const equipamentoService = {
   },
 
   async atualizar(id: number, data: EquipamentoRequest): Promise<EquipamentoDTO> {
-    const response = await apiClient.put<EquipamentoDTO>(`/equipamentos/${id}`, data);
-    return response.data;
+    const existing = (await apiClient.get<ApiEquipment>(`/equipment/${id}`)).data;
+    const response = await apiClient.put<ApiEquipment>(`/equipment/${id}`, {
+      siteId: data.localId,
+      name: data.nome,
+      serialNumber: data.numeroSerie,
+      model: data.tipo,
+      assetNumber: existing.assetNumber,
+      manufacturer: existing.manufacturer,
+      description: existing.description,
+      qrCode: existing.qrCode,
+      status: existing.status,
+      installedAt: existing.installedAt,
+    });
+    return fromApiEquipment(response.data);
   },
 
   async inativar(id: number): Promise<void> {
-    await apiClient.delete(`/equipamentos/${id}`);
+    await apiClient.patch(`/equipment/${id}/status`, { status: 'INACTIVE' });
   },
 };
