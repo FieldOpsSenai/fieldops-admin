@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import TopHeader from '@/components/layout/TopHeader';
 import { getApiErrorMessage } from '@/lib/api/errorMessage';
+import EquipmentQrCode from './EquipmentQrCode';
+import EquipmentQrLookup from './EquipmentQrLookup';
 import {
   Building2,
   MapPin,
@@ -1623,6 +1625,7 @@ export default function ClientsHierarchyManager({
             {/* ----------------- DETAIL: EQUIPAMENTO (STEP 3) ----------------- */}
             {currentStep === 3 && (
               <>
+                <EquipmentQrLookup onSelect={setSelectedEquipamento} />
                 {selectedEquipamento ? (
                   <div className="space-y-5 animate-in fade-in">
                     <div className="flex items-start justify-between pb-4 border-b border-slate-100">
@@ -1683,6 +1686,7 @@ export default function ClientsHierarchyManager({
                       </div>
                     </div>
 
+                    <EquipmentQrCode value={selectedEquipamento.qrCode} name={selectedEquipamento.nome} />
                     <div className="pt-3 border-t border-slate-100 space-y-2">
                       <button
                         onClick={() => handleOpenEquipModal(selectedEquipamento)}
