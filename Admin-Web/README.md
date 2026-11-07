@@ -30,7 +30,15 @@ O `fieldops-admin` é responsável pela interface web utilizada por administrado
 
 ## Desenvolvimento
 
-As instruções específicas de instalação, execução, testes e arquitetura da aplicação devem ser mantidas pela equipe responsável pelo desenvolvimento do Admin.
+### Conectar à API local
+
+1. Inicie o `fieldops-api` com o PostgreSQL configurado. A API deve estar disponível em `http://localhost:8080`.
+2. O Next.js encaminha `/api/v1/*` para `http://localhost:8080/api/v1/*`. Copie `.env.example` para `.env.local` apenas se precisar mudar a URL base usada pelo Admin-Web.
+3. Instale as dependências e inicie o Admin-Web com `npm install` e `npm run dev`. Por padrão, o Next.js ficará disponível em `http://localhost:3000`.
+
+O cliente HTTP usa o proxy do Next.js e envia o JWT no cabeçalho `Authorization: Bearer`. A URL base pode ser alterada pela variável pública `NEXT_PUBLIC_API_URL`. As rotas e os formatos usados pelos serviços do Admin-Web seguem o contrato documentado no repositório `fieldops-api`; a autorização final continua sendo aplicada pela API.
+
+O contrato atual permite consultar e cadastrar clientes, locais, equipamentos, usuários e inspeções, além de inativar clientes e usuários. Recursos sem endpoint correspondente na API não são simulados pelo Admin-Web.
 
 ## Convenções
 
