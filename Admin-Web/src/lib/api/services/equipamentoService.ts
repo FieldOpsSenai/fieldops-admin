@@ -1,5 +1,5 @@
 import apiClient from '../axios';
-import { getPageContent } from './apiPage';
+import { getPageContent, mapApiPage, type ApiPage, type CadastroQuery } from './apiPage';
 
 export interface EquipamentoDTO {
   id: number;
@@ -49,6 +49,12 @@ function fromApiEquipment(equipment: ApiEquipment): EquipamentoDTO {
 }
 
 export const equipamentoService = {
+  async listarPagina(query: CadastroQuery, signal?: AbortSignal): Promise<ApiPage<EquipamentoDTO>> {
+    const response = await apiClient.get<ApiPage<ApiEquipment>>('/equipment', {
+      params: { page: query.page ?? 0, size: query.size ?? 10, name: query.search || undefined, status: query.status, siteId: query.siteId, sort: 'name,asc' }, signal,
+    });
+    return mapApiPage(response.data, fromApiEquipment);
+  },
   async listarTodos(): Promise<EquipamentoDTO[]> {
     const response = await apiClient.get<ApiEquipment[] | { content?: ApiEquipment[] }>('/equipment', {
       params: { size: 200 },
