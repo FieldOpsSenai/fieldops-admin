@@ -1,18 +1,20 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import {
-  LayoutDashboard,
-  ClipboardCheck,
-  CalendarDays,
-  FileText,
-  Users,
   Building2,
-  MapPin,
-  Wrench,
+  CalendarDays,
+  ClipboardCheck,
+  FileText,
   HelpCircle,
+  LayoutDashboard,
+  MapPin,
   MapPinned,
+  Menu,
+  Users,
+  Wrench,
+  X,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { usePathname } from 'next/navigation';
@@ -33,7 +35,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   {
     name: 'Dashboard',
-    href: '/',
+    href: '/dashboard',
     icon: LayoutDashboard,
     roles: ['ADMIN', 'SUPERVISOR'],
   },
@@ -41,7 +43,7 @@ const navItems: NavItem[] = [
     name: 'Usuários',
     href: '/users',
     icon: Users,
-    roles: ['ADMIN'],
+    roles: ['ADMIN', 'SUPERVISOR'],
   },
   {
     name: 'Clientes',
@@ -77,74 +79,188 @@ const navItems: NavItem[] = [
     name: 'Planejamento',
     href: '/inspections/new',
     icon: CalendarDays,
-    roles: ['SUPERVISOR'],
+    roles: ['ADMIN', 'SUPERVISOR'],
   },
 ];
 
-export default function Sidebar() {
-  const pathname = usePathname();
-  const { session } = useSessionStore();
+function isNavItemActive(
+  pathname: string,
+  href: string
+) {
+if (href === '/inspections/new') {
+    return pathname === '/inspections/new';
+  }
 
-  const role = normalizeRole(session?.profile);
-
-  const visibleItems = navItems.filter((item) =>
-    item.roles.includes(role)
-  );
+  if (href === '/inspections') {
+    return (
+      pathname === '/inspections' ||
+      (
+        pathname.startsWith('/inspections/') &&
+        pathname !== '/inspections/new'
+      )
+    );
+  }
 
   return (
-    <aside className="w-64 bg-[#526379] flex flex-col h-screen text-slate-300">
-      <div className="h-16 flex items-center px-6 gap-3 bg-[#445569] text-white">
-        <div className="bg-[#10b981] p-1.5 rounded text-white">
-          <MapPinned size={20} strokeWidth={2.5} />
-        </div>
+    pathname === href ||
+    pathname.startsWith(`${href}/`)
+  );
+}
 
-        <div>
-          <div className="font-bold text-lg leading-tight tracking-wide">
-            FieldOps
+export default function Sidebar() {
+  const pathname = usePathname();
+
+  const session = useSessionStore(
+    (state) => state.session
+  );
+
+  const [isMobileOpen, setIsMobileOpen] =
+    useState(false);
+
+  const role = normalizeRole(
+    session?.profile
+  );
+
+  const visibleItems =
+    navItems.filter((item) =>
+      item.roles.includes(role)
+    );
+
+  const closeMobileMenu = () => {
+    setIsMobileOpen(false);
+  };
+
+  return (
+    <>
+      {/* Mobile menu button */}
+      <button
+        type="button"
+        onClick={() =>
+          setIsMobileOpen(
+            (current) => !current
+          )
+        }
+        className="fixed left-4 top-4 z-[60] flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 md:hidden"
+        aria-label={
+          isMobileOpen
+            ? 'Fechar menu'
+            : 'Abrir menu'
+        }
+        aria-expanded={isMobileOpen}
+        aria-controls="fieldops-sidebar"
+      >
+        {isMobileOpen ? (
+          <X size={19} />
+        ) : (
+          <Menu size={19} />
+        )}
+      </button>
+
+      {/* Mobile backdrop */}
+      {isMobileOpen && (
+        <button
+          type="button"
+          aria-label="Fechar menu lateral"
+          onClick={closeMobileMenu}
+          className="fixed inset-0 z-40 bg-slate-950/50 md:hidden"
+        />
+      )}
+
+      <aside
+        id="fieldops-sidebar"
+        className={clsx(
+          'fixed inset-y-0 left-0 z-50 flex h-screen w-64 flex-col bg-[#526379] text-slate-300',
+          'transition-transform duration-200 ease-out',
+          'md:static md:z-auto md:translate-x-0 md:shrink-0',
+          isMobileOpen
+            ? 'translate-x-0'
+            : '-translate-x-full'
+        )}
+      >
+        {/* Brand */}
+        <div className="h-16 flex shrink-0 items-center gap-3 bg-[#445569] px-6 text-white">
+          <div className="rounded bg-[#10b981] p-1.5 text-white">
+            <MapPinned
+              size={20}
+              strokeWidth={2.5}
+            />
           </div>
 
-          <div className="text-[0.65rem] text-slate-300 tracking-wider font-semibold uppercase">
-            Technical Inspection
+          <div>
+            <div className="text-lg font-bold leading-tight tracking-wide">
+              FieldOps
+            </div>
+
+            <div className="text-[0.65rem] font-semibold uppercase tracking-wider text-slate-300">
+              Technical Inspection
+            </div>
           </div>
         </div>
-      </div>
 
-      <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
-        {visibleItems.map((item) => {
-          const Icon = item.icon;
+        {/* Navigation */}
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-6">
+          {visibleItems.map((item) => {
+            const Icon = item.icon;
 
-          const isActive =
-            pathname === item.href ||
-            (item.href !== '/' && pathname.startsWith(`${item.href}/`));
+            const active =
+              isNavItemActive(
+                pathname,
+                item.href
+              );
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={clsx(
-                'flex items-center gap-3 px-3 py-2.5 rounded-md',
-                'transition-colors text-sm font-medium border-l-4',
-                isActive
-                  ? 'bg-[#445569] text-white border-[#10b981]'
-                  : 'hover:bg-[#445569] hover:text-white border-transparent'
-              )}
-            >
-              <Icon size={18} />
-              {item.name}
-            </Link>
-          );
-        })}
-      </nav>
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={closeMobileMenu}
+                aria-current={
+                  active
+                    ? 'page'
+                    : undefined
+                }
+                className={clsx(
+                  'flex items-center gap-3 rounded-md border-l-4 px-3 py-2.5',
+                  'text-sm font-medium transition-colors',
+                  active
+                    ? 'border-[#10b981] bg-[#445569] text-white'
+                    : 'border-transparent hover:bg-[#445569] hover:text-white'
+                )}
+              >
+                <Icon
+                  size={18}
+                  className="shrink-0"
+                />
 
-      <div className="p-3 border-t border-[#64748b]">
-        <Link
-          href="/support"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-[#445569] hover:text-white transition-colors text-sm font-medium"
-        >
-          <HelpCircle size={18} />
-          Suporte
-        </Link>
-      </div>
-    </aside>
+                <span>
+                  {item.name}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Footer */}
+        <div className="border-t border-[#64748b] p-3">
+          <Link
+            href="/support"
+            onClick={closeMobileMenu}
+            className={clsx(
+              'flex items-center gap-3 rounded-md border-l-4 px-3 py-2.5',
+              'text-sm font-medium transition-colors',
+              pathname === '/support'
+                ? 'border-[#10b981] bg-[#445569] text-white'
+                : 'border-transparent hover:bg-[#445569] hover:text-white'
+            )}
+          >
+            <HelpCircle
+              size={18}
+              className="shrink-0"
+            />
+
+            Suporte
+          </Link>
+        </div>
+      </aside>
+    </>
   );
 }

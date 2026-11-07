@@ -1,153 +1,300 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Search, Bell, LogOut, User, Activity, CheckCircle2, Shield } from 'lucide-react';
-import { useSessionStore } from '@/stores/sessionStore';
-import { authService } from '@/lib/api/services';
-import apiClient from '@/lib/api/axios';
+import React, {
+  useEffect,
+  useState,
+} from 'react';
 
-export default function TopHeader({ title, context }: { title: string; context?: React.ReactNode }) {
-  const { session } = useSessionStore();
-  const [isApiOnline, setIsApiOnline] = useState<boolean | null>(null);
-  const [showUserMenu, setShowUserMenu] = useState(false);
+import {
+  Activity,
+  LogOut,
+  Shield,
+} from 'lucide-react';
 
-  // Ping API endpoint or auth status
+import {
+  useSessionStore,
+} from '@/stores/sessionStore';
+
+import {
+  authService,
+} from '@/lib/api/services';
+
+export default function TopHeader({
+  title,
+  context,
+}: {
+  title: string;
+  context?: React.ReactNode;
+}) {
+  const session =
+    useSessionStore(
+      (state) =>
+        state.session
+    );
+
+  const [
+    isApiOnline,
+    setIsApiOnline,
+  ] =
+    useState<
+      boolean | null
+    >(null);
+
+  const [
+    showUserMenu,
+    setShowUserMenu,
+  ] =
+    useState(false);
+
   useEffect(() => {
-    let isMounted = true;
-    const checkApi = async () => {
-      try {
-        await apiClient.get('/clientes', { timeout: 3000 });
-        if (isMounted) setIsApiOnline(true);
-      } catch (err: any) {
-        // If 401/403, API is online! If network error, API is offline
-        if (isMounted) {
-          if (err.response) {
-            setIsApiOnline(true);
-          } else {
-            setIsApiOnline(false);
+    let active = true;
+
+    const checkApi =
+      async () => {
+        try {
+          /*
+           * Usamos axios diretamente,
+           * e não apiClient.
+           *
+           * Assim um 401/403 neste
+           * teste de conectividade
+           * não ativa os redirects
+           * globais do interceptor.
+           *
+           * Qualquer resposta HTTP
+           * significa que a API está
+           * acessível.
+           */
+          const response = await fetch('/api/v1/clients', {
+            cache: 'no-store',
+            signal: AbortSignal.timeout(5000),
+          });
+
+          if (response.status >= 500) {
+            throw new Error('A API respondeu com erro interno.');
+          }
+
+          if (active) {
+            setIsApiOnline(
+              true
+            );
+          }
+        } catch (
+          error: unknown
+        ) {
+          if (active) {
+            setIsApiOnline(
+              false
+            );
+          }
+
+          if (
+            process.env
+              .NODE_ENV ===
+            'development'
+          ) {
+            console.debug(
+              'API indisponível durante verificação de conectividade.',
+              error
+            );
           }
         }
-      }
-    };
+      };
 
-    checkApi();
-    const interval = setInterval(checkApi, 30000);
+    void checkApi();
+
+    const intervalId =
+      window.setInterval(
+        () => {
+          void checkApi();
+        },
+        30_000
+      );
+
     return () => {
-      isMounted = false;
-      clearInterval(interval);
+      active = false;
+
+      window.clearInterval(
+        intervalId
+      );
     };
   }, []);
 
-  const userName = session?.name || 'Administrador';
-  const userEmail = session?.email || 'admin@fieldops.com';
-  const userProfile = session?.profile || 'ADMINISTRADOR';
+  const userName =
+    session?.name ||
+    'Usuário';
 
-  const userInitials = userName
-    .split(' ')
-    .map((n) => n[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase() || 'AD';
+  const userEmail =
+    session?.email ||
+    '';
+
+  const userProfile =
+    session?.profile ||
+    '—';
+
+  const initials =
+    userName
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map(
+        (part) =>
+          part[0]
+      )
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() ||
+    'FO';
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-20">
-      
-      {/* Left side: Context/Breadcrumbs & Search */}
-      <div className="flex items-center gap-6 flex-1">
-        <div className="flex items-center gap-2">
-          {context ? (
-            context
-          ) : (
-            <span className="font-bold text-slate-800 text-lg">{title}</span>
-          )}
-        </div>
-
-        <div className="relative w-64 max-w-md hidden md:block">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-            <Search size={16} />
+<header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between gap-4 pl-16 pr-4 sm:pr-6 md:px-6 sticky top-0 z-20">      {/* LEFT */}
+      <div className="min-w-0 flex-1">
+        {context ? (
+          <div className="min-w-0">
+            {context}
           </div>
-          <input 
-            type="text" 
-            placeholder="Pesquisar no sistema..."
-            className="block w-full pl-9 py-1.5 bg-slate-100 border-transparent rounded-md text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#10b981] focus:border-transparent transition-colors"
-          />
-        </div>
+        ) : (
+          <span className="block font-bold text-slate-800 text-base sm:text-lg truncate">
+            {title}
+          </span>
+        )}
       </div>
 
-      {/* Right side: API Status, Actions & Profile */}
-      <div className="flex items-center gap-4 text-slate-500">
-        
-        {/* Live Backend Connection Indicator */}
-        <div className="hidden sm:flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-full border border-slate-200 bg-slate-50">
-          <span 
-            className={`w-2 h-2 rounded-full ${
-              isApiOnline === true 
-                ? 'bg-emerald-500 animate-pulse' 
-                : isApiOnline === false 
-                ? 'bg-red-500' 
-                : 'bg-amber-500'
-            }`}
+      {/* RIGHT */}
+      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+        {/* API STATUS */}
+        <div
+          className="hidden sm:flex items-center gap-2 text-xs font-semibold px-2.5 py-1.5 rounded-full border border-slate-200 bg-slate-50"
+          title={
+            isApiOnline ===
+            true
+              ? 'A API FieldOps está respondendo.'
+              : isApiOnline ===
+                  false
+                ? 'Não foi possível acessar a API FieldOps.'
+                : 'Verificando conectividade com a API.'
+          }
+        >
+          <Activity
+            size={13}
+            className={
+              isApiOnline ===
+              true
+                ? 'text-emerald-600'
+                : isApiOnline ===
+                    false
+                  ? 'text-red-600'
+                  : 'text-amber-500'
+            }
           />
-          <span className="text-slate-600">
-            API Java 8080: {isApiOnline === true ? 'Online' : isApiOnline === false ? 'Offline' : 'Conectando'}
+
+          <span
+            className={
+              isApiOnline ===
+              true
+                ? 'text-emerald-700'
+                : isApiOnline ===
+                    false
+                  ? 'text-red-700'
+                  : 'text-slate-600'
+            }
+          >
+            {isApiOnline ===
+            true
+              ? 'API Online'
+              : isApiOnline ===
+                  false
+                ? 'API Offline'
+                : 'Verificando API'}
           </span>
         </div>
-        
-        <button 
-          className="p-1.5 hover:bg-slate-100 rounded-full transition-colors relative cursor-pointer"
-          title="Notificações"
-        >
-          <Bell size={18} />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full border border-white"></span>
-        </button>
 
-        <div className="h-6 w-px bg-slate-200 mx-1"></div>
-        
-        {/* User Profile Pill & Dropdown */}
+        <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+
+        {/* USER */}
         <div className="relative">
-          <button 
-            onClick={() => setShowUserMenu(!showUserMenu)}
-            className="flex items-center gap-2.5 hover:bg-slate-50 p-1.5 rounded-lg border border-transparent hover:border-slate-200 transition-all cursor-pointer"
+          <button
+            type="button"
+            onClick={() =>
+              setShowUserMenu(
+                (current) =>
+                  !current
+              )
+            }
+            className="flex items-center gap-2.5 hover:bg-slate-50 p-1.5 rounded-lg border border-transparent hover:border-slate-200 transition-colors"
+            aria-expanded={
+              showUserMenu
+            }
+            aria-haspopup="menu"
           >
-            <div className="w-8 h-8 rounded-full bg-[#0f766e] flex items-center justify-center text-white text-xs font-bold shadow-2xs">
-              {userInitials}
+            <div className="w-8 h-8 rounded-full bg-[#0f766e] flex items-center justify-center text-white text-xs font-bold shadow-xs">
+              {initials}
             </div>
-            <div className="text-left hidden lg:block">
-              <div className="text-xs font-bold text-slate-800 leading-tight">{userName}</div>
-              <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-1">
-                <Shield size={10} className="text-[#0f766e]" />
+
+            <div className="text-left hidden md:block">
+              <div className="text-xs font-bold text-slate-800 leading-tight max-w-40 truncate">
+                {userName}
+              </div>
+
+              <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider flex items-center gap-1 mt-0.5">
+                <Shield
+                  size={10}
+                  className="text-[#0f766e]"
+                />
+
                 {userProfile}
               </div>
             </div>
           </button>
 
-          {/* User Menu Dropdown */}
           {showUserMenu && (
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-slate-200 py-1.5 z-30 animate-in fade-in">
-              <div className="px-4 py-2.5 border-b border-slate-100">
-                <div className="font-bold text-sm text-slate-800">{userName}</div>
-                <div className="text-xs text-slate-500 truncate">{userEmail}</div>
-                <span className="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 bg-teal-50 text-[#0f766e] rounded">
+            <div
+              role="menu"
+              className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30"
+            >
+              <div className="px-4 py-3 border-b border-slate-100">
+                <div className="font-bold text-sm text-slate-800 truncate">
+                  {userName}
+                </div>
+
+                {userEmail && (
+                  <div className="text-xs text-slate-500 truncate mt-0.5">
+                    {userEmail}
+                  </div>
+                )}
+
+                <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-bold px-2 py-1 bg-teal-50 text-[#0f766e] rounded-md">
+                  <Shield
+                    size={10}
+                  />
+
                   {userProfile}
                 </span>
               </div>
 
-              <div className="py-1">
+              <div className="p-1.5">
                 <button
+                  type="button"
+                  role="menuitem"
                   onClick={() => {
-                    setShowUserMenu(false);
+                    setShowUserMenu(
+                      false
+                    );
+
                     authService.logout();
                   }}
-                  className="w-full px-4 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors cursor-pointer"
+                  className="w-full px-3 py-2.5 text-left text-xs font-semibold text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-2 transition-colors"
                 >
-                  <LogOut size={14} />
-                  Sair do Sistema (Logout)
+                  <LogOut
+                    size={14}
+                  />
+
+                  Sair do sistema
                 </button>
               </div>
             </div>
           )}
         </div>
-
       </div>
     </header>
   );

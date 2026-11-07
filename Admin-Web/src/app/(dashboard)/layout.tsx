@@ -10,13 +10,11 @@ export default function DashboardLayout({
 }) {
   return (
     <AdminWebGuard>
-      <div className="flex h-screen overflow-hidden bg-[var(--background)]">
-        <div className="flex-shrink-0">
-          <Sidebar />
-        </div>
+      <div className="flex min-h-screen bg-[var(--background)] md:h-screen md:overflow-hidden">
+        <Sidebar />
 
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <main className="flex-1 overflow-y-auto">
+        <div className="min-w-0 flex-1 flex flex-col md:h-screen md:overflow-hidden">
+          <main className="min-w-0 flex-1 md:overflow-y-auto">
             {children}
           </main>
         </div>
