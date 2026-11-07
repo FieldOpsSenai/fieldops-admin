@@ -65,7 +65,7 @@ export default function TopHeader({
            * significa que a API está
            * acessível.
            */
-          const response = await fetch('/api/v1/clients', {
+          const response = await fetch('/api/session', {
             cache: 'no-store',
             signal: AbortSignal.timeout(5000),
           });
