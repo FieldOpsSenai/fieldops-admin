@@ -23,7 +23,8 @@ import {
 } from '@/lib/api/services';
 import type { Profile } from '@/types';
 import { useSessionStore } from '@/stores/sessionStore';
-import { canManageUsers } from '@/lib/auth/permissions';
+import { canManageUsers, canEditUsers } from '@/lib/auth/permissions';
+import { getApiErrorMessage } from '@/lib/api/errorMessage';
 import { useRouter } from 'next/navigation';
 
 type StatusFilter = 'TODOS' | 'ATIVOS' | 'INATIVOS';
@@ -33,6 +34,8 @@ export default function UsersPage() {
   const router = useRouter();
   const { session } = useSessionStore();
   const canManageCurrentUsers = canManageUsers(session?.profile);
+  const canEditCurrentUsers = canEditUsers(session?.profile);
+  const [editingUser, setEditingUser] = useState<UsuarioDTO | null>(null);
 
   const [usuarios, setUsuarios] = useState<UsuarioDTO[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -165,6 +168,7 @@ export default function UsersPage() {
   };
 
   const handleInactivate = async (usuario: UsuarioDTO) => {
+    if (!canEditCurrentUsers) return;
     const confirmed = window.confirm(
       `Inativar ${usuario.nome}? A pessoa perderá o acesso ao FieldOps.`
     );
@@ -196,6 +200,7 @@ export default function UsersPage() {
   };
 
   const openCreateModal = () => {
+    setEditingUser(null);
     setNome('');
     setEmail('');
     setSenha('');
@@ -203,10 +208,21 @@ export default function UsersPage() {
     setIsModalOpen(true);
   };
 
+  const openEditModal = (usuario: UsuarioDTO) => {
+    setEditingUser(usuario);
+    setNome(usuario.nome);
+    setEmail(usuario.email);
+    setSenha('');
+    setPerfil(usuario.perfil);
+    setErrorMessage(null);
+    setIsModalOpen(true);
+  };
+
   const handleCreateUser = async (
     event: React.FormEvent
   ) => {
     event.preventDefault();
+    if (!canEditCurrentUsers) return;
 
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -221,9 +237,9 @@ export default function UsersPage() {
       return;
     }
 
-    if (senha.length < 6) {
+    if ((!editingUser || senha) && (senha.length < 6 || senha.length > 72)) {
       setErrorMessage(
-        'A senha deve possuir pelo menos 6 caracteres.'
+        'A senha deve possuir entre 6 e 72 caracteres.'
       );
       return;
     }
@@ -231,20 +247,22 @@ export default function UsersPage() {
     setIsSubmitting(true);
 
     try {
-      const created = await usuarioService.cadastrar({
+      const payload = {
         nome: nome.trim(),
         email: email.trim(),
         senha,
         perfil,
-      });
+      };
+      const created = editingUser
+        ? await usuarioService.atualizar(editingUser.id, payload)
+        : await usuarioService.cadastrar(payload);
 
-      setUsuarios((current) => [
-        created,
-        ...current,
-      ]);
+      setUsuarios((current) => editingUser
+        ? current.map((item) => item.id === created.id ? created : item)
+        : [created, ...current]);
 
       setSuccessMessage(
-        `Usuário "${created.nome}" cadastrado com sucesso.`
+        `Usuário "${created.nome}" ${editingUser ? 'atualizado' : 'cadastrado'} com sucesso.`
       );
 
       setIsModalOpen(false);
@@ -253,10 +271,8 @@ export default function UsersPage() {
         setSuccessMessage(null);
       }, 4000);
     } catch (error: unknown) {
-      console.error('Erro ao cadastrar usuário:', error);
-
       setErrorMessage(
-        'Não foi possível cadastrar o usuário. Verifique os dados e tente novamente.'
+        getApiErrorMessage(error, 'Não foi possível salvar o usuário. Verifique os dados e tente novamente.')
       );
     } finally {
       setIsSubmitting(false);
@@ -380,14 +396,14 @@ export default function UsersPage() {
               Atualizar
             </button>
 
-            <button
+            {canEditCurrentUsers && <button
               type="button"
               onClick={openCreateModal}
               className="flex items-center gap-2 px-4 py-2.5 bg-[#0f766e] hover:bg-[#115e59] text-white rounded-lg text-sm font-bold"
             >
               <UserPlus size={17} />
               Novo usuário
-            </button>
+            </button>}
           </div>
         </section>
 
@@ -616,7 +632,12 @@ export default function UsersPage() {
                       </td>
 
                       <td className="px-6 py-4 text-right">
-                        {usuario.ativo && (
+                        {canEditCurrentUsers && (
+                          <button type="button" onClick={() => openEditModal(usuario)} className="mr-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700" aria-label={`Editar ${usuario.nome}`}>
+                            Editar
+                          </button>
+                        )}
+                        {canEditCurrentUsers && usuario.ativo && (
                           <button
                             type="button"
                             onClick={() => void handleInactivate(usuario)}
@@ -650,15 +671,12 @@ export default function UsersPage() {
 
             <div>
               <h3 className="text-sm font-bold text-amber-900">
-                Funcionalidades dependentes da API
+                Permissões de gerenciamento
               </h3>
 
               <p className="text-xs leading-5 text-amber-800 mt-1">
-                A API disponibiliza a inativação de usuários
-                pela rota PATCH /usuarios/:id/inativar,
-                integrada nesta tela. Ativação, bloqueio e
-                redefinição de acesso ainda não estão expostos
-                no contrato atual.
+                Administradores podem cadastrar, editar e inativar contas.
+                Supervisores podem consultar os usuários.
               </p>
             </div>
           </div>
@@ -671,11 +689,11 @@ export default function UsersPage() {
             <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
               <div>
                 <h2 className="font-bold text-lg text-slate-900">
-                  Novo usuário
+                  {editingUser ? 'Editar usuário' : 'Novo usuário'}
                 </h2>
 
                 <p className="text-xs text-slate-500">
-                  Cadastre uma nova conta no FieldOps.
+                  {editingUser ? 'Deixe a senha vazia para manter a senha atual.' : 'Cadastre uma nova conta no FieldOps.'}
                 </p>
               </div>
 
@@ -694,14 +712,17 @@ export default function UsersPage() {
               onSubmit={handleCreateUser}
               className="p-6 space-y-4"
             >
+              {errorMessage && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{errorMessage}</p>}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label htmlFor="user-name" className="block text-xs font-bold text-slate-700 mb-1">
                   Nome completo *
                 </label>
 
                 <input
+                  id="user-name"
                   type="text"
                   required
+                  maxLength={100}
                   value={nome}
                   onChange={(event) =>
                     setNome(event.target.value)
@@ -711,13 +732,15 @@ export default function UsersPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label htmlFor="user-email" className="block text-xs font-bold text-slate-700 mb-1">
                   E-mail *
                 </label>
 
                 <input
+                  id="user-email"
                   type="email"
                   required
+                  maxLength={150}
                   value={email}
                   onChange={(event) =>
                     setEmail(event.target.value)
@@ -727,14 +750,17 @@ export default function UsersPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Senha inicial *
+                <label htmlFor="user-password" className="block text-xs font-bold text-slate-700 mb-1">
+                  {editingUser ? 'Nova senha (opcional)' : 'Senha inicial *'}
                 </label>
 
                 <input
+                  id="user-password"
                   type="password"
-                  required
+                  required={!editingUser}
                   minLength={6}
+                  maxLength={72}
+                  autoComplete="new-password"
                   value={senha}
                   onChange={(event) =>
                     setSenha(event.target.value)
@@ -744,11 +770,12 @@ export default function UsersPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label htmlFor="user-profile" className="block text-xs font-bold text-slate-700 mb-1">
                   Perfil *
                 </label>
 
                 <select
+                  id="user-profile"
                   value={perfil}
                   onChange={(event) =>
                     setPerfil(
@@ -800,7 +827,7 @@ export default function UsersPage() {
                     <>
                       <Plus size={15} />
 
-                      Cadastrar usuário
+                      {editingUser ? 'Salvar alterações' : 'Cadastrar usuário'}
                     </>
                   )}
                 </button>
