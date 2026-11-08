@@ -107,3 +107,17 @@ it('previews unsaved changes and returns to the same editor without any writes',
   expect(modeloInspecaoService.salvarRascunho).not.toHaveBeenCalled();
   expect(modeloInspecaoService.publicar).not.toHaveBeenCalled();
 });
+
+it('shows publication history and prevents direct editing of published models', async () => {
+  jest.mocked(modeloInspecaoService.listarTodos).mockResolvedValue([{
+    ...template, status: 'PUBLICADO', version: 2, publishedVersions: [
+      { id: 7, versionNumber: 1, publishedBy: 4, publishedAt: '2026-11-06T12:00:00Z' },
+      { id: 8, versionNumber: 2, publishedBy: 5, publishedAt: '2026-11-07T12:00:00Z' },
+    ],
+  }] as never);
+  render(<TemplatesPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Visualizar' }));
+  expect(screen.getByRole('region', { name: 'Versões publicadas' })).toHaveTextContent('v2 · ID 8');
+  expect(screen.getByRole('region', { name: 'Versões publicadas' })).toHaveTextContent('Usuário #4');
+  expect(screen.queryByRole('button', { name: 'Editar rascunho' })).not.toBeInTheDocument();
+});

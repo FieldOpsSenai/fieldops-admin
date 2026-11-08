@@ -1,6 +1,6 @@
 import apiClient from '../axios';
 import { getPageContent } from './apiPage';
-import type { ResponseType, Template, TemplateItem, TemplateSection } from '@/types';
+import type { ResponseType, Template, TemplateItem, TemplateSection, TemplateVersion } from '@/types';
 import { validateTemplateItems } from '@/lib/templates/validation';
 
 export interface ModeloInspecaoPublicado {
@@ -17,13 +17,6 @@ interface TemplateSummary {
   category: string;
   version: number;
   status: 'ACTIVE' | 'DRAFT' | 'INACTIVE';
-}
-
-interface TemplateVersion {
-  id: number;
-  versionNumber: number;
-  publishedAt?: string;
-  publishedBy?: number;
 }
 
 interface ApiTemplateItem {
@@ -88,7 +81,7 @@ function mapTemplateItem(item: ApiTemplateItem): TemplateItem {
   };
 }
 
-function mapTemplate(template: ApiTemplateDetail, version?: TemplateVersion): Template & { description: string; category: string } {
+function mapTemplate(template: ApiTemplateDetail, version?: TemplateVersion, versions?: TemplateVersion[]): Template & { description: string; category: string } {
   return {
     id: String(template.id),
     title: template.title,
@@ -100,6 +93,7 @@ function mapTemplate(template: ApiTemplateDetail, version?: TemplateVersion): Te
     updatedAt: template.updatedAt,
     publishedAt: version?.publishedAt,
     publishedBy: version?.publishedBy ? `Usuário #${version.publishedBy}` : undefined,
+    publishedVersions: versions ?? (version ? [version] : []),
     sections: [...template.sections].sort((a, b) => a.displayOrder - b.displayOrder).map((section): TemplateSection => ({
       id: String(section.id),
       title: section.title,
@@ -183,9 +177,15 @@ export const modeloInspecaoService = {
   },
 
   async publicar(id: string) {
+    const preview = (await apiClient.get<{ template: ApiTemplateDetail; validForPublication: boolean; issues: string[] }>(
+      `/inspection-templates/${id}/preview`,
+    )).data;
+    if (preview.template.status !== 'DRAFT') throw new Error('Somente rascunhos podem ser publicados.');
+    if (!preview.validForPublication) throw new Error(preview.issues.join(' ') || 'A estrutura do modelo não pode ser publicada.');
     const version = await apiClient.post<TemplateVersion>(`/inspection-templates/${id}/publish`);
-    const detail = await apiClient.get<ApiTemplateDetail>(`/inspection-templates/${id}`);
-    return mapTemplate(detail.data, version.data);
+    // Publication is already confirmed. Do not turn a later read failure into
+    // a false publication error that invites a second POST.
+    return mapTemplate({ ...preview.template, status: 'ACTIVE', currentVersion: version.data.versionNumber }, version.data);
   },
 
   async listarTodos(): Promise<Array<Template & { description: string; category: string }>> {
@@ -200,7 +200,7 @@ export const modeloInspecaoService = {
         apiClient.get<TemplateVersion[]>(`/inspection-templates/${summary.id}/versions`),
       ]);
       const latestVersion = [...versionsResponse.data].sort((a, b) => b.versionNumber - a.versionNumber)[0];
-      return mapTemplate(detailResponse.data, latestVersion);
+      return mapTemplate(detailResponse.data, latestVersion, versionsResponse.data);
     }));
   },
 
