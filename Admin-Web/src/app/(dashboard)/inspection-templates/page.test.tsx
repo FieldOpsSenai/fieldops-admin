@@ -73,3 +73,23 @@ it('moves sections with their items and saves the new order', async () => {
     { ...original.sections[1], order: 1 }, { ...original.sections[0], order: 2 },
   ] })));
 });
+
+it('saves independent required, observation and evidence rules on the selected item', async () => {
+  const original = { ...template, sections: [{ id: '10', title: 'Motor', order: 1, items: [{
+    id: '20', label: 'Sem vazamento?', responseType: 'BOOLEAN', order: 1,
+    required: false, allowObservation: false, requireEvidenceOnNonConformity: false,
+  }] }] };
+  jest.mocked(modeloInspecaoService.listarTodos).mockResolvedValue([original] as never);
+  jest.mocked(modeloInspecaoService.salvarRascunho).mockResolvedValue(original as never);
+  render(<TemplatesPage />);
+  fireEvent.click(await screen.findByTitle('Editar rascunho'));
+  fireEvent.click(screen.getByLabelText('Resposta obrigatória'));
+  fireEvent.click(screen.getByLabelText('Exigir observação em não conformidade'));
+  fireEvent.click(screen.getByLabelText('Exigir evidência em não conformidade'));
+  fireEvent.click(screen.getByRole('button', { name: 'Salvar rascunho' }));
+  await waitFor(() => expect(modeloInspecaoService.salvarRascunho).toHaveBeenCalledWith('1', expect.objectContaining({
+    sections: [expect.objectContaining({ items: [expect.objectContaining({
+      id: '20', required: true, allowObservation: true, requireEvidenceOnNonConformity: true,
+    })] })],
+  })));
+});
