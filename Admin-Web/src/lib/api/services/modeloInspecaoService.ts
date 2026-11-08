@@ -95,11 +95,11 @@ function mapTemplate(template: ApiTemplateDetail, version?: TemplateVersion): Te
     updatedAt: template.updatedAt,
     publishedAt: version?.publishedAt,
     publishedBy: version?.publishedBy ? `Usuário #${version.publishedBy}` : undefined,
-    sections: template.sections.map((section): TemplateSection => ({
+    sections: [...template.sections].sort((a, b) => a.displayOrder - b.displayOrder).map((section): TemplateSection => ({
       id: String(section.id),
       title: section.title,
       order: section.displayOrder,
-      items: section.items.map(mapTemplateItem),
+      items: [...section.items].sort((a, b) => a.displayOrder - b.displayOrder).map(mapTemplateItem),
     })),
   };
 }
@@ -125,6 +125,9 @@ export const modeloInspecaoService = {
     const current = (await apiClient.get<ApiTemplateDetail>(base)).data;
     if (current.status !== 'DRAFT') throw new Error('Versões publicadas são imutáveis.');
     for (const section of data.sections) {
+      if (!section.title.trim() || section.title.trim().length > 200) {
+        throw new Error('Cada seção deve ter um nome com até 200 caracteres.');
+      }
       const previous = current.sections.find((entry) => String(entry.id) === section.id);
       if (previous?.items.some((item) => !section.items.some((entry) => entry.id === String(item.id)))) {
         throw new Error('A exclusão de itens já salvos ainda não está disponível. Você pode remover a seção inteira.');

@@ -596,16 +596,7 @@ export default function TemplatesPage() {
     (
       sectionIndex: number
     ) => {
-      if (
-        formSections.length ===
-        1
-      ) {
-        setEditorError(
-          'O modelo precisa possuir pelo menos uma seção.'
-        );
-
-        return;
-      }
+      if (!window.confirm('Remover esta seção e seus itens ao salvar o rascunho?')) return;
 
       setFormSections(
         (current) =>
@@ -622,6 +613,15 @@ export default function TemplatesPage() {
       );
     };
 
+  const handleMoveSection = (index: number, direction: -1 | 1) => {
+    setFormSections((current) => {
+      const destination = index + direction;
+      if (destination < 0 || destination >= current.length) return current;
+      const reordered = [...current];
+      [reordered[index], reordered[destination]] = [reordered[destination], reordered[index]];
+      return normalizeOrders(reordered);
+    });
+  };
   const handleSectionTitleChange =
     (
       sectionIndex: number,
@@ -968,6 +968,10 @@ export default function TemplatesPage() {
       return;
     }
     const sections = normalizeOrders(cloneSections(formSections));
+    if (sections.some((section) => !section.title.trim() || section.title.trim().length > 200)) {
+      setEditorError('Cada seção deve ter um nome com até 200 caracteres.');
+      return;
+    }
     if (statusToSave === 'PUBLICADO') {
       const errors = validateTemplateForPublish(formTitle, formCategory, sections);
       if (errors.length) { setEditorError(errors.join(' ')); return; }
@@ -1610,6 +1614,7 @@ export default function TemplatesPage() {
           onAddSection={
             handleAddSection
           }
+          onMoveSection={handleMoveSection}
           onRemoveSection={
             handleRemoveSection
           }
@@ -2212,6 +2217,7 @@ type EditorModalProps = {
 
   onAddSection: () => void;
 
+  onMoveSection: (index: number, direction: -1 | 1) => void;
   onRemoveSection: (
     sectionIndex: number
   ) => void;
@@ -2279,6 +2285,7 @@ function EditorModal({
   onDescriptionChange,
   onCategoryChange,
   onAddSection,
+  onMoveSection,
   onRemoveSection,
   onSectionTitleChange,
   onAddItem,
@@ -2502,6 +2509,7 @@ function EditorModal({
 
                     <input
                       type="text"
+                      aria-label={`Nome da seção ${sectionIndex + 1}`} maxLength={200}
                       value={
                         section.title
                       }
@@ -2526,7 +2534,7 @@ function EditorModal({
                         )
                       }
                       className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                      title="Remover seção"
+                      title={`Remover seção ${sectionIndex + 1}`}
                     >
                       <Trash2
                         size={16}
@@ -2534,6 +2542,10 @@ function EditorModal({
                     </button>
                   </div>
 
+                  <div className="flex gap-2 px-4 pt-3">
+                    <button type="button" disabled={isSaving || sectionIndex === 0} onClick={() => onMoveSection(sectionIndex, -1)} aria-label={`Subir seção ${sectionIndex + 1}`} className="text-xs font-semibold text-teal-700 disabled:text-slate-300">↑ Subir</button>
+                    <button type="button" disabled={isSaving || sectionIndex === formSections.length - 1} onClick={() => onMoveSection(sectionIndex, 1)} aria-label={`Descer seção ${sectionIndex + 1}`} className="text-xs font-semibold text-teal-700 disabled:text-slate-300">↓ Descer</button>
+                  </div>
                   <div className="p-4 space-y-4">
                     {section.items.map(
                       (
