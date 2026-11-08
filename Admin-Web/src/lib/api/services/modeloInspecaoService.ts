@@ -1,6 +1,7 @@
 import apiClient from '../axios';
 import { getPageContent } from './apiPage';
 import type { ResponseType, Template, TemplateItem, TemplateSection } from '@/types';
+import { validateTemplateItems } from '@/lib/templates/validation';
 
 export interface ModeloInspecaoPublicado {
   versaoId: number;
@@ -55,14 +56,18 @@ interface ApiTemplateDetail extends TemplateSummary {
 }
 
 function mapResponseType(value: string): ResponseType {
+  if (value === 'TEXT_LONG') return 'LONG_TEXT';
+  if (value === 'BOOLEAN') return 'YES_NO';
   if (value === 'NUMBER') return 'NUMERIC';
   if (value === 'SINGLE_CHOICE') return 'SINGLE_SELECT';
-  if (value === 'BOOLEAN' || value === 'CONFORMITY') return 'BOOLEAN';
+  if (value === 'CONFORMITY') return 'BOOLEAN';
   if (value === 'DATE') return 'DATE';
   return 'TEXT';
 }
 
 function toApiResponseType(value: ResponseType): string {
+  if (value === 'LONG_TEXT') return 'TEXT_LONG';
+  if (value === 'YES_NO') return 'BOOLEAN';
   if (value === 'NUMERIC') return 'NUMBER';
   if (value === 'SINGLE_SELECT') return 'SINGLE_CHOICE';
   if (value === 'BOOLEAN') return 'CONFORMITY';
@@ -124,6 +129,8 @@ export const modeloInspecaoService = {
     const base = `/inspection-templates/${id}`;
     const current = (await apiClient.get<ApiTemplateDetail>(base)).data;
     if (current.status !== 'DRAFT') throw new Error('Versões publicadas são imutáveis.');
+    const errors = validateTemplateItems(data.sections);
+    if (errors.length) throw new Error(errors.join(' '));
     for (const section of data.sections) {
       if (!section.title.trim() || section.title.trim().length > 200) {
         throw new Error('Cada seção deve ter um nome com até 200 caracteres.');
@@ -151,14 +158,11 @@ export const modeloInspecaoService = {
         const payload = {
           title: item.label,
           description: oldItem?.description,
-          // Preserve API distinctions (long/short text, boolean/conformity) on
-          // edits that do not change the response type exposed in the editor.
-          responseType: oldItem && mapResponseType(oldItem.responseType) === item.responseType
-            ? oldItem.responseType : toApiResponseType(item.responseType),
+          responseType: toApiResponseType(item.responseType),
           required: item.required,
           observationRequiredOnFailure: item.allowObservation,
           evidenceRequiredOnFailure: item.requireEvidenceOnNonConformity,
-          optionsJson: item.options?.map((option) => option.label) ?? [],
+          optionsJson: item.responseType === 'SINGLE_SELECT' ? item.options?.map((option) => option.label.trim()) ?? [] : [],
           displayOrder: itemIndex + 1,
         };
         const path = `${base}/sections/${section.id}/items`;

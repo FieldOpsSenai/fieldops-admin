@@ -57,6 +57,8 @@ export interface Equipment {
 export type TemplateStatus = "RASCUNHO" | "PUBLICADO";
 export type ResponseType =
   | "TEXT"
+  | "LONG_TEXT"
+  | "YES_NO"
   | "NUMERIC"
   | "DATE"
   | "SINGLE_SELECT"

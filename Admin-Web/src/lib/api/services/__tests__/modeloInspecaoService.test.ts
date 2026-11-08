@@ -76,7 +76,7 @@ it('rejects unsupported persisted item removal before changing metadata', async 
 
 it('preserves long text response types and descriptions on an unrelated edit', async () => {
   const data = draft();
-  data.sections[0].items[0].responseType = 'TEXT';
+  data.sections[0].items[0].responseType = 'LONG_TEXT';
   jest.mocked(apiClient.get).mockResolvedValue({ data: {
     ...detail, sections: [{ ...detail.sections[0], items: [{ ...item, responseType: 'TEXT_LONG' }] }],
   } });
@@ -113,5 +113,30 @@ it('deletes removed sections only after all remaining edits succeed', async () =
 it('rejects blank section names without sending writes', async () => {
   const data = draft(); data.sections[0].title = '  ';
   await expect(modeloInspecaoService.salvarRascunho('1', data)).rejects.toThrow('nome');
+  expect(apiClient.put).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['TEXT', 'TEXT_SHORT'], ['LONG_TEXT', 'TEXT_LONG'], ['YES_NO', 'BOOLEAN'],
+  ['BOOLEAN', 'CONFORMITY'], ['NUMERIC', 'NUMBER'], ['DATE', 'DATE'], ['SINGLE_SELECT', 'SINGLE_CHOICE'],
+] as const)('persists %s as %s and restores the same type', async (uiType, apiType) => {
+  const data = draft();
+  data.sections[0].items[0].responseType = uiType;
+  data.sections[0].items[0].options = [{ id: 'a', label: 'Sim', order: 1 }, { id: 'b', label: 'Não', order: 2 }];
+  jest.mocked(apiClient.get).mockResolvedValue({ data: {
+    ...detail, sections: [{ ...detail.sections[0], items: [{ ...item, responseType: apiType }] }],
+  } });
+  const result = await modeloInspecaoService.salvarRascunho('1', data);
+  expect(apiClient.put).toHaveBeenLastCalledWith('/inspection-templates/1/sections/11/items/21', expect.objectContaining({
+    responseType: apiType, optionsJson: uiType === 'SINGLE_SELECT' ? ['Sim', 'Não'] : [],
+  }));
+  expect(result.sections[0].items[0].responseType).toBe(uiType);
+});
+
+it.each([['Sim', ' sim '], ['Sim', ''], ['Única']])('rejects invalid choice options %j before writes', async (...labels) => {
+  const data = draft();
+  data.sections[0].items[0].responseType = 'SINGLE_SELECT';
+  data.sections[0].items[0].options = labels.map((label, order) => ({ label, id: String(order), order }));
+  await expect(modeloInspecaoService.salvarRascunho('1', data)).rejects.toThrow('opções');
   expect(apiClient.put).not.toHaveBeenCalled();
 });
