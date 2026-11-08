@@ -1,5 +1,5 @@
 import apiClient from '../axios';
-import { getPageContent } from './apiPage';
+import { collectPages, getPageContent, type ApiPage } from './apiPage';
 import type { ResponseType, Template, TemplateItem, TemplateSection, TemplateVersion } from '@/types';
 import { validateTemplateItems } from '@/lib/templates/validation';
 
@@ -205,33 +205,16 @@ export const modeloInspecaoService = {
   },
 
   async listarPublicados(): Promise<ModeloInspecaoPublicado[]> {
-    const response = await apiClient.get<TemplateSummary[] | { content?: TemplateSummary[] }>(
-      '/inspection-templates',
-      { params: { status: 'ACTIVE', page: 0, size: 200 } },
-    );
-
-    const templates = getPageContent(response.data);
-    const versions = await Promise.all(
-      templates.map(async (template) => {
-        const versionResponse = await apiClient.get<TemplateVersion[]>(
-          `/inspection-templates/${template.id}/versions`,
-        );
-        const latest = [...versionResponse.data].sort(
-          (left, right) => right.versionNumber - left.versionNumber,
-        )[0];
-
-        return latest
-          ? {
-              versaoId: latest.id,
-              modeloId: template.id,
-              titulo: template.title,
-              categoria: template.category,
-              versao: latest.versionNumber,
-            }
-          : null;
-      }),
-    );
-
-    return versions.filter((version): version is ModeloInspecaoPublicado => version !== null);
+    const templates = await collectPages(async (page) => (await apiClient.get<ApiPage<TemplateSummary>>(
+      '/inspection-templates', { params: { status: 'ACTIVE', page, size: 100 } },
+    )).data);
+    const versions = await Promise.all(templates.filter((template) => template.status === 'ACTIVE').map(async (template) => {
+      const response = await apiClient.get<TemplateVersion[]>(`/inspection-templates/${template.id}/versions`);
+      return [...response.data].sort((a, b) => b.versionNumber - a.versionNumber).map((version) => ({
+        versaoId: version.id, modeloId: template.id, titulo: version.titleSnapshot ?? template.title,
+        categoria: template.category, versao: version.versionNumber,
+      }));
+    }));
+    return versions.flat();
   },
 };
