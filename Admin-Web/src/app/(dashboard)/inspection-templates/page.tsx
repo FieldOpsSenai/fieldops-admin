@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   AlertTriangle,
@@ -24,6 +24,7 @@ import {
   X,
 } from 'lucide-react';
 
+import { getApiErrorMessage } from '@/lib/api/errorMessage';
 import TopHeader from '@/components/layout/TopHeader';
 import { modeloInspecaoService } from '@/lib/api/services';
 
@@ -76,200 +77,6 @@ const PUBLISHABLE_RESPONSE_TYPES: ResponseType[] = [
   'DATE',
   'SINGLE_SELECT',
   'BOOLEAN',
-];
-
-const INITIAL_TEMPLATES: InspectionTemplate[] = [
-  {
-    id: 'TMP-001',
-    title:
-      'Inspeção Preventiva de Compressores Industriais',
-    description:
-      'Checklist padrão para inspeção mecânica, elétrica e operacional de compressores industriais.',
-    category: 'Mecânica & Fluidos',
-    status: 'PUBLICADO',
-    version: 1,
-    createdAt:
-      '2026-08-01T12:00:00.000Z',
-    updatedAt:
-      '2026-08-03T15:30:00.000Z',
-    publishedAt:
-      '2026-08-03T15:30:00.000Z',
-    publishedBy:
-      'Supervisor FieldOps',
-    sections: [
-      {
-        id: 'SEC-1000',
-        title:
-          '1. Segurança e condições iniciais',
-        order: 1,
-        items: [
-          {
-            id: 'ITM-1001',
-            label:
-              'Equipamento encontra-se em condição segura para inspeção?',
-            responseType:
-              'BOOLEAN',
-            required: true,
-            allowObservation: true,
-            requireEvidenceOnNonConformity:
-              true,
-            order: 1,
-          },
-          {
-            id: 'ITM-1002',
-            label:
-              'Data da última manutenção preventiva',
-            responseType:
-              'DATE',
-            required: true,
-            allowObservation: true,
-            requireEvidenceOnNonConformity:
-              false,
-            order: 2,
-          },
-        ],
-      },
-      {
-        id: 'SEC-1100',
-        title:
-          '2. Verificação operacional',
-        order: 2,
-        items: [
-          {
-            id: 'ITM-1101',
-            label:
-              'Pressão de operação medida',
-            responseType:
-              'NUMERIC',
-            required: true,
-            allowObservation: true,
-            requireEvidenceOnNonConformity:
-              true,
-            order: 1,
-          },
-          {
-            id: 'ITM-1102',
-            label:
-              'Condição geral dos filtros',
-            responseType:
-              'SINGLE_SELECT',
-            required: true,
-            allowObservation: true,
-            requireEvidenceOnNonConformity:
-              true,
-            order: 2,
-            options: [
-              {
-                id: 'OPT-1102-1',
-                label: 'Normal',
-                order: 1,
-              },
-              {
-                id: 'OPT-1102-2',
-                label:
-                  'Requer limpeza',
-                order: 2,
-              },
-              {
-                id: 'OPT-1102-3',
-                label:
-                  'Requer substituição',
-                order: 3,
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'TMP-002',
-    title:
-      'Inspeção de Painéis Elétricos',
-    description:
-      'Roteiro para inspeção visual e técnica de painéis elétricos industriais.',
-    category: 'Elétrica & NR-10',
-    status: 'PUBLICADO',
-    version: 1,
-    createdAt:
-      '2026-08-08T10:00:00.000Z',
-    updatedAt:
-      '2026-08-10T14:00:00.000Z',
-    publishedAt:
-      '2026-08-10T14:00:00.000Z',
-    publishedBy:
-      'Supervisor FieldOps',
-    sections: [
-      {
-        id: 'SEC-2000',
-        title:
-          '1. Condições do painel',
-        order: 1,
-        items: [
-          {
-            id: 'ITM-2001',
-            label:
-              'O painel possui identificação visível?',
-            responseType:
-              'BOOLEAN',
-            required: true,
-            allowObservation: true,
-            requireEvidenceOnNonConformity:
-              true,
-            order: 1,
-          },
-          {
-            id: 'ITM-2002',
-            label:
-              'Observações sobre integridade física',
-            responseType:
-              'TEXT',
-            required: false,
-            allowObservation: true,
-            requireEvidenceOnNonConformity:
-              false,
-            order: 2,
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'TMP-003',
-    title:
-      'Inspeção de Segurança em Caldeiras',
-    description:
-      'Modelo em elaboração para inspeções relacionadas à segurança de caldeiras.',
-    category: 'Segurança NR-13',
-    status: 'RASCUNHO',
-    version: 1,
-    createdAt:
-      '2026-09-20T09:00:00.000Z',
-    updatedAt:
-      '2026-09-20T09:00:00.000Z',
-    sections: [
-      {
-        id: 'SEC-3000',
-        title:
-          '1. Verificações preliminares',
-        order: 1,
-        items: [
-          {
-            id: 'ITM-3001',
-            label:
-              'Documentação do equipamento disponível?',
-            responseType:
-              'BOOLEAN',
-            required: true,
-            allowObservation: true,
-            requireEvidenceOnNonConformity:
-              true,
-            order: 1,
-          },
-        ],
-      },
-    ],
-  },
 ];
 
 function createId(
@@ -467,8 +274,12 @@ export default function TemplatesPage() {
     setTemplates,
   ] = useState<
     InspectionTemplate[]
-  >(INITIAL_TEMPLATES);
+  >([]);
 
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [reload, setReload] = useState(0);
   const [isApiListAvailable, setIsApiListAvailable] = useState(true);
 
   useEffect(() => {
@@ -482,13 +293,13 @@ export default function TemplatesPage() {
         }
       })
       .catch(() => {
-        if (active) setIsApiListAvailable(false);
-      });
+        if (active) { setIsApiListAvailable(false); setTemplates([]); }
+      }).finally(() => { if (active) setIsLoading(false); });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [reload]);
 
   const [
     searchTerm,
@@ -754,91 +565,19 @@ export default function TemplatesPage() {
     );
   };
 
-  const handleDuplicate = (
-    template: InspectionTemplate
-  ) => {
-    const now =
-      new Date().toISOString();
-
-    const duplicated: InspectionTemplate =
-      {
-        ...template,
-
-        id: createId(
-          'TMP'
-        ),
-
-        title:
-          `${template.title} (Cópia)`,
-
-        status:
-          'RASCUNHO',
-
-        version: 1,
-
-        createdAt: now,
-
-        updatedAt: now,
-
-        publishedAt:
-          undefined,
-
-        publishedBy:
-          undefined,
-
-        sections:
-          cloneSections(
-            template.sections
-          ),
-      };
-
-    setTemplates(
-      (current) => [
-        duplicated,
-        ...current,
-      ]
-    );
-
-    showToast(
-      `Modelo "${template.title}" copiado para um novo rascunho.`
-    );
+  const handleDuplicate = (template: InspectionTemplate) => {
+    handleOpenNewEditor();
+    setFormTitle(`${template.title} (Cópia)`);
+    setFormDescription(template.description);
+    setFormCategory(template.category);
+    setFormSections(template.sections.map((section) => ({
+      ...section, id: createId('SEC'),
+      items: section.items.map((item) => ({ ...item, id: createId('ITEM') })),
+    })));
   };
 
-  const handleDelete = (
-    template: InspectionTemplate
-  ) => {
-    if (
-      template.status ===
-      'PUBLICADO'
-    ) {
-      showToast(
-        'Uma versão publicada não pode ser excluída.'
-      );
-
-      return;
-    }
-
-    const confirmed =
-      window.confirm(
-        `Deseja realmente remover o rascunho "${template.title}"?`
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setTemplates(
-      (current) =>
-        current.filter(
-          (item) =>
-            item.id !==
-            template.id
-        )
-    );
-
-    showToast(
-      `Rascunho "${template.title}" removido.`
-    );
+  const handleDelete = () => {
+    showToast('A exclusão de modelos ainda não está disponível. O rascunho foi mantido.');
   };
 
   const handleAddSection =
@@ -951,6 +690,11 @@ export default function TemplatesPage() {
         formSections[
           sectionIndex
         ];
+
+      if (/^\d+$/.test(section.items[itemIndex].id)) {
+        setEditorError('A exclusão de itens já salvos ainda não está disponível.');
+        return;
+      }
 
       if (
         section.items.length ===
@@ -1216,162 +960,45 @@ export default function TemplatesPage() {
       );
     };
 
-  const handleSaveEditor =
-      async (
-      statusToSave: TemplateStatus
-    ) => {
-      setEditorError(null);
-
-      if (
-        !formTitle.trim()
-      ) {
-        setEditorError(
-          'Informe o título do modelo.'
-        );
-
-        return;
+  const handleSaveEditor = async (statusToSave: TemplateStatus) => {
+    if (savingRef.current) return;
+    setEditorError(null);
+    if (!formTitle.trim() || formTitle.trim().length > 200) {
+      setEditorError('Informe um título com até 200 caracteres.');
+      return;
+    }
+    const sections = normalizeOrders(cloneSections(formSections));
+    if (statusToSave === 'PUBLICADO') {
+      const errors = validateTemplateForPublish(formTitle, formCategory, sections);
+      if (errors.length) { setEditorError(errors.join(' ')); return; }
+    }
+    savingRef.current = true;
+    setIsSaving(true);
+    const data = { title: formTitle.trim(), description: formDescription.trim(), category: formCategory, sections };
+    try {
+      let draft = editingTemplate;
+      if (!draft) {
+        draft = await modeloInspecaoService.criarRascunho({ title: data.title, description: data.description, category: data.category });
+        setEditingTemplate(draft);
+        setTemplates((current) => [draft!, ...current]);
       }
-
-      const normalizedSections =
-        normalizeOrders(
-          formSections
-        );
-
-      if (
-        statusToSave ===
-        'PUBLICADO'
-      ) {
-        if (
-          editingTemplate?.status ===
-          'PUBLICADO'
-        ) {
-          setEditorError(
-            'Versões publicadas são imutáveis.'
-          );
-
-          return;
-        }
-
-        const validationErrors =
-          validateTemplateForPublish(
-            formTitle,
-            formCategory,
-            normalizedSections
-          );
-
-        if (
-          validationErrors.length >
-          0
-        ) {
-          setEditorError(
-            validationErrors.join(
-              ' '
-            )
-          );
-
-          return;
-        }
+      const saved = await modeloInspecaoService.salvarRascunho(draft.id, data);
+      setEditingTemplate(saved);
+      setTemplates((current) => current.map((item) => item.id === saved.id ? saved : item));
+      if (statusToSave === 'PUBLICADO') {
+        const published = await modeloInspecaoService.publicar(saved.id);
+        setTemplates((current) => current.map((item) => item.id === published.id ? published : item));
       }
-
-      const now =
-        new Date().toISOString();
-
-      if (
-        editingTemplate
-      ) {
-        setTemplates(
-          (current) =>
-            current.map(
-              (template) => {
-                if (
-                  template.id !==
-                  editingTemplate.id
-                ) {
-                  return template;
-                }
-
-                return {
-                  ...template,
-
-                  title:
-                    formTitle.trim(),
-
-                  description:
-                    formDescription.trim() ||
-                    'Modelo de inspeção operacional.',
-
-                  category:
-                    formCategory,
-
-                  sections:
-                    cloneSections(
-                      normalizedSections
-                    ),
-
-                  status:
-                    statusToSave,
-
-                  version:
-                    template.version,
-
-                  updatedAt:
-                    now,
-
-                  publishedAt:
-                    statusToSave ===
-                    'PUBLICADO'
-                      ? now
-                      : undefined,
-
-                  publishedBy:
-                    statusToSave ===
-                    'PUBLICADO'
-                      ? 'Supervisor FieldOps'
-                      : undefined,
-                };
-              }
-            )
-        );
-
-        if (
-          statusToSave ===
-          'PUBLICADO'
-        ) {
-          showToast(
-            `Modelo "${formTitle}" publicado. Esta versão agora é imutável.`
-          );
-        } else {
-          showToast(
-            `Rascunho "${formTitle}" salvo.`
-          );
-        }
-      } else {
-        try {
-          const created = await modeloInspecaoService.criar(
-            {
-              title: formTitle.trim(),
-              description: formDescription.trim() || 'Modelo de inspeção operacional.',
-              category: formCategory,
-              sections: normalizedSections,
-            },
-            statusToSave === 'PUBLICADO',
-          );
-
-          setTemplates((current) => [created, ...current]);
-          showToast(statusToSave === 'PUBLICADO'
-            ? `Modelo "${formTitle}" publicado. Esta versão agora é imutável.`
-            : `Rascunho "${formTitle}" salvo na API.`);
-        } catch (error) {
-          setEditorError(error instanceof Error ? error.message : 'Não foi possível salvar o modelo na API.');
-          return;
-        }
-      }
-
-      setIsEditorOpen(
-        false
-      );
-    };
-
+      showToast(statusToSave === 'PUBLICADO' ? 'Modelo publicado. Esta versão é imutável.' : 'Rascunho salvo.');
+      setIsEditorOpen(false);
+    } catch (error) {
+      setFormSections(data.sections);
+      setEditorError(getApiErrorMessage(error, 'Não foi possível salvar o modelo. As alterações confirmadas foram mantidas; tente novamente.'));
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
+    }
+  };
   return (
     <>
       <TopHeader
@@ -1464,13 +1091,13 @@ export default function TemplatesPage() {
 
             <p className="text-xs text-amber-800 mt-1 leading-5">
               {isApiListAvailable
-                ? 'A listagem e a criação/publicação de novos modelos são persistidas na API. Edição e duplicação de modelos existentes ainda não estão conectadas; versões publicadas permanecem imutáveis.'
-                : 'Não foi possível carregar os modelos da API. Os dados demonstrativos são exibidos como referência e não são persistidos.'}
+                ? 'Rascunhos são salvos e podem ser editados. Use Copiar para preparar um novo rascunho a partir de qualquer modelo. A exclusão de modelos e de itens já salvos ainda não está disponível.'
+                : 'Não foi possível carregar os modelos. Tente novamente para consultar os dados salvos.'}
             </p>
           </div>
         </section>
 
-        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div role="status">{isLoading ? "Carregando modelos…" : !isApiListAvailable ? <button type="button" onClick={() => { setIsLoading(true); setReload((value) => value + 1); }}>Tentar novamente</button> : null}</div><section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <MetricCard
             icon={
               <Layers3
@@ -1693,9 +1320,7 @@ export default function TemplatesPage() {
                     )
                   }
                   onDelete={() =>
-                    handleDelete(
-                      template
-                    )
+                    handleDelete()
                   }
                 />
               )
@@ -1861,12 +1486,10 @@ export default function TemplatesPage() {
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    handleDelete(
-                                      template
-                                    )
+                                    handleDelete()
                                   }
                                   className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
-                                  title="Excluir rascunho"
+                                  disabled title="Exclusão de rascunhos indisponível"
                                 >
                                   <Trash2
                                     size={
@@ -1951,7 +1574,7 @@ export default function TemplatesPage() {
       )}
 
       {isEditorOpen && (
-        <EditorModal
+        <EditorModal isSaving={isSaving}
           editingTemplate={
             editingTemplate
           }
@@ -1971,7 +1594,7 @@ export default function TemplatesPage() {
             editorError
           }
           onClose={() =>
-            setIsEditorOpen(
+            !isSaving && setIsEditorOpen(
               false
             )
           }
@@ -2231,7 +1854,7 @@ function TemplateCard({
                 onDelete
               }
               className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
-              title="Excluir rascunho"
+              disabled title="Exclusão de rascunhos indisponível"
             >
               <Trash2
                 size={15}
@@ -2557,6 +2180,7 @@ function ResponsePreview({
 }
 
 type EditorModalProps = {
+  isSaving: boolean;
   editingTemplate:
     | InspectionTemplate
     | null;
@@ -2643,6 +2267,7 @@ type EditorModalProps = {
 };
 
 function EditorModal({
+  isSaving,
   editingTemplate,
   formTitle,
   formDescription,
@@ -2691,7 +2316,7 @@ function EditorModal({
           </div>
 
           <button
-            type="button"
+            type="button" disabled={isSaving}
             onClick={
               onClose
             }
@@ -2701,9 +2326,9 @@ function EditorModal({
           </button>
         </header>
 
-        <div className="p-5 md:p-6 overflow-y-auto flex-1 space-y-6">
+        <fieldset disabled={isSaving} className="p-5 md:p-6 overflow-y-auto flex-1 space-y-6">
           {editorError && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-sm text-red-700">
+            <div role="alert" className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-sm text-red-700">
               <AlertTriangle
                 size={18}
                 className="shrink-0 mt-0.5"
@@ -2746,7 +2371,7 @@ function EditorModal({
                       .value
                   )
                 }
-                placeholder="Ex: Inspeção Preventiva de Geradores"
+                aria-label="Título do modelo" maxLength={200} placeholder="Ex: Inspeção Preventiva de Geradores"
                 className="w-full py-2 px-3 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#10b981]"
               />
             </div>
@@ -2844,7 +2469,7 @@ function EditorModal({
               </div>
 
               <button
-                type="button"
+                type="button" disabled={isSaving}
                 onClick={
                   onAddSection
                 }
@@ -2894,7 +2519,7 @@ function EditorModal({
                     />
 
                     <button
-                      type="button"
+                      type="button" disabled={isSaving}
                       onClick={() =>
                         onRemoveSection(
                           sectionIndex
@@ -2983,7 +2608,7 @@ function EditorModal({
                     )}
 
                     <button
-                      type="button"
+                      type="button" disabled={isSaving}
                       onClick={() =>
                         onAddItem(
                           sectionIndex
@@ -2999,7 +2624,7 @@ function EditorModal({
               )
             )}
           </section>
-        </div>
+        </fieldset>
 
         <footer className="p-4 md:px-6 bg-slate-50 border-t border-slate-200 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3">
           <p className="text-[11px] text-slate-500 max-w-xl">
@@ -3008,7 +2633,7 @@ function EditorModal({
 
           <div className="flex flex-col sm:flex-row gap-2">
             <button
-              type="button"
+              type="button" disabled={isSaving}
               onClick={
                 onClose
               }
@@ -3018,18 +2643,18 @@ function EditorModal({
             </button>
 
             <button
-              type="button"
+              type="button" disabled={isSaving}
               onClick={
                 onSaveDraft
               }
               className="px-4 py-2 bg-white border border-amber-300 text-amber-700 hover:bg-amber-50 rounded-lg text-sm font-bold"
             >
-              Salvar rascunho
+              {isSaving ? 'Salvando…' : 'Salvar rascunho'}
             </button>
 
             {(!editingTemplate || editingTemplate.status === 'RASCUNHO') && (
               <button
-                type="button"
+                type="button" disabled={isSaving}
                 onClick={
                   onPublish
                 }

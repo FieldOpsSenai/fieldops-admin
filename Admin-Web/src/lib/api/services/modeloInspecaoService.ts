@@ -22,11 +22,13 @@ interface TemplateVersion {
   id: number;
   versionNumber: number;
   publishedAt?: string;
+  publishedBy?: number;
 }
 
 interface ApiTemplateItem {
   id: number;
   title: string;
+  description?: string;
   responseType: string;
   required: boolean;
   observationRequiredOnFailure: boolean;
@@ -38,6 +40,7 @@ interface ApiTemplateItem {
 interface ApiTemplateSection {
   id: number;
   title: string;
+  description?: string;
   displayOrder: number;
   items: ApiTemplateItem[];
 }
@@ -80,7 +83,7 @@ function mapTemplateItem(item: ApiTemplateItem): TemplateItem {
   };
 }
 
-function mapTemplate(template: ApiTemplateDetail, publishedAt?: string): Template & { description: string; category: string } {
+function mapTemplate(template: ApiTemplateDetail, version?: TemplateVersion): Template & { description: string; category: string } {
   return {
     id: String(template.id),
     title: template.title,
@@ -90,8 +93,8 @@ function mapTemplate(template: ApiTemplateDetail, publishedAt?: string): Templat
     version: template.currentVersion ?? template.version,
     createdAt: template.createdAt,
     updatedAt: template.updatedAt,
-    publishedAt,
-    publishedBy: publishedAt ? 'FieldOps' : undefined,
+    publishedAt: version?.publishedAt,
+    publishedBy: version?.publishedBy ? `Usuário #${version.publishedBy}` : undefined,
     sections: template.sections.map((section): TemplateSection => ({
       id: String(section.id),
       title: section.title,
@@ -102,51 +105,80 @@ function mapTemplate(template: ApiTemplateDetail, publishedAt?: string): Templat
 }
 
 export const modeloInspecaoService = {
-  async criar(
+  async criarRascunho(data: { title: string; description: string; category: string }) {
+    const response = await apiClient.post<ApiTemplateDetail>('/inspection-templates', data);
+    return mapTemplate(response.data);
+  },
+
+  async buscarPorId(id: string) {
+    const response = await apiClient.get<ApiTemplateDetail>(`/inspection-templates/${id}`);
+    return mapTemplate(response.data);
+  },
+
+  // Successful creates replace temporary IDs in this working copy. Keep it on a
+  // failed save so retrying does not duplicate confirmed sections or items.
+  async salvarRascunho(
+    id: string,
     data: { title: string; description: string; category: string; sections: TemplateSection[] },
-    publish: boolean,
-  ): Promise<Template & { description: string; category: string }> {
-    const created = await apiClient.post<TemplateSummary>('/inspection-templates', {
-      title: data.title,
-      description: data.description,
-      category: data.category,
-    });
-
-    for (const [sectionIndex, section] of data.sections.entries()) {
-      await apiClient.post<ApiTemplateSection>(
-        `/inspection-templates/${created.data.id}/sections`,
-        { title: section.title, displayOrder: sectionIndex + 1 },
-      );
-
-      const refreshed = await apiClient.get<ApiTemplateDetail>(`/inspection-templates/${created.data.id}`);
-      const persistedSection = refreshed.data.sections.find(
-        (item) => item.title === section.title && item.displayOrder === sectionIndex + 1,
-      );
-      if (!persistedSection) {
-        throw new Error(`A seção "${section.title}" não foi confirmada pela API.`);
+  ) {
+    const base = `/inspection-templates/${id}`;
+    const current = (await apiClient.get<ApiTemplateDetail>(base)).data;
+    if (current.status !== 'DRAFT') throw new Error('Versões publicadas são imutáveis.');
+    for (const section of data.sections) {
+      const previous = current.sections.find((entry) => String(entry.id) === section.id);
+      if (previous?.items.some((item) => !section.items.some((entry) => entry.id === String(item.id)))) {
+        throw new Error('A exclusão de itens já salvos ainda não está disponível. Você pode remover a seção inteira.');
       }
-
+      for (const item of section.items) {
+        if (item.responseType === 'MULTI_SELECT') throw new Error('Seleção múltipla ainda não está disponível.');
+      }
+    }
+    await apiClient.put(base, { title: data.title, description: data.description, category: data.category });
+    for (const [index, section] of data.sections.entries()) {
+      const previous = current.sections.find((entry) => String(entry.id) === section.id);
+      const payload = { title: section.title, description: previous?.description, displayOrder: index + 1 };
+      if (previous) {
+        await apiClient.put(`${base}/sections/${section.id}`, payload);
+      } else {
+        const created = await apiClient.post<ApiTemplateSection>(`${base}/sections`, payload);
+        section.id = String(created.data.id);
+      }
       for (const [itemIndex, item] of section.items.entries()) {
-        await apiClient.post(`/inspection-templates/${created.data.id}/sections/${persistedSection.id}/items`, {
+        const oldItem = previous?.items.find((entry) => String(entry.id) === item.id);
+        const payload = {
           title: item.label,
-          responseType: toApiResponseType(item.responseType),
+          description: oldItem?.description,
+          // Preserve API distinctions (long/short text, boolean/conformity) on
+          // edits that do not change the response type exposed in the editor.
+          responseType: oldItem && mapResponseType(oldItem.responseType) === item.responseType
+            ? oldItem.responseType : toApiResponseType(item.responseType),
           required: item.required,
           observationRequiredOnFailure: item.allowObservation,
           evidenceRequiredOnFailure: item.requireEvidenceOnNonConformity,
           optionsJson: item.options?.map((option) => option.label) ?? [],
           displayOrder: itemIndex + 1,
-        });
+        };
+        const path = `${base}/sections/${section.id}/items`;
+        if (oldItem) await apiClient.put(`${path}/${item.id}`, payload);
+        else {
+          const created = await apiClient.post<ApiTemplateItem>(path, payload);
+          item.id = String(created.data.id);
+        }
       }
     }
-
-    let publishedAt: string | undefined;
-    if (publish) {
-      const version = await apiClient.post<TemplateVersion>(`/inspection-templates/${created.data.id}/publish`);
-      publishedAt = version.data.publishedAt;
+    // Remove sections only after all requested additions/updates succeeded.
+    for (const section of current.sections) {
+      if (!data.sections.some((entry) => entry.id === String(section.id))) {
+        await apiClient.delete(`${base}/sections/${section.id}`);
+      }
     }
+    return this.buscarPorId(id);
+  },
 
-    const detail = await apiClient.get<ApiTemplateDetail>(`/inspection-templates/${created.data.id}`);
-    return mapTemplate(detail.data, publishedAt);
+  async publicar(id: string) {
+    const version = await apiClient.post<TemplateVersion>(`/inspection-templates/${id}/publish`);
+    const detail = await apiClient.get<ApiTemplateDetail>(`/inspection-templates/${id}`);
+    return mapTemplate(detail.data, version.data);
   },
 
   async listarTodos(): Promise<Array<Template & { description: string; category: string }>> {
@@ -161,7 +193,7 @@ export const modeloInspecaoService = {
         apiClient.get<TemplateVersion[]>(`/inspection-templates/${summary.id}/versions`),
       ]);
       const latestVersion = [...versionsResponse.data].sort((a, b) => b.versionNumber - a.versionNumber)[0];
-      return mapTemplate(detailResponse.data, latestVersion?.publishedAt);
+      return mapTemplate(detailResponse.data, latestVersion);
     }));
   },
 
