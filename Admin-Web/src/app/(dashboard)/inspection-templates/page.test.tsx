@@ -93,3 +93,17 @@ it('saves independent required, observation and evidence rules on the selected i
     })] })],
   })));
 });
+
+it('previews unsaved changes and returns to the same editor without any writes', async () => {
+  render(<TemplatesPage />);
+  fireEvent.click(await screen.findByTitle('Editar rascunho'));
+  fireEvent.change(screen.getByLabelText('Título do modelo'), { target: { value: 'Alteração ainda não salva' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Prévia do checklist' }));
+  expect(screen.getByRole('dialog', { name: 'Prévia do modelo' })).toHaveTextContent('Alteração ainda não salva');
+  expect(screen.getByText(/Nenhum dado foi salvo ou publicado/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Voltar à edição' }));
+  expect(screen.getByLabelText('Título do modelo')).toHaveValue('Alteração ainda não salva');
+  expect(modeloInspecaoService.criarRascunho).not.toHaveBeenCalled();
+  expect(modeloInspecaoService.salvarRascunho).not.toHaveBeenCalled();
+  expect(modeloInspecaoService.publicar).not.toHaveBeenCalled();
+});

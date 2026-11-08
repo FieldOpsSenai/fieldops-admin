@@ -1552,6 +1552,7 @@ export default function TemplatesPage() {
 
       {previewTemplate && (
         <PreviewModal
+          unsaved={isEditorOpen}
           template={
             previewTemplate
           }
@@ -1561,6 +1562,7 @@ export default function TemplatesPage() {
             )
           }
           onEdit={() => {
+            if (isEditorOpen) { setPreviewTemplate(null); return; }
             const target =
               previewTemplate;
 
@@ -1584,8 +1586,13 @@ export default function TemplatesPage() {
         />
       )}
 
-      {isEditorOpen && (
+      {isEditorOpen && !previewTemplate && (
         <EditorModal isSaving={isSaving}
+          onPreview={() => setPreviewTemplate({
+            id: editingTemplate?.id ?? 'prévia', title: formTitle, description: formDescription,
+            category: formCategory, sections: normalizeOrders(cloneSections(formSections)), status: 'RASCUNHO',
+            version: editingTemplate?.version ?? 1, createdAt: '', updatedAt: '',
+          })}
           editingTemplate={
             editingTemplate
           }
@@ -1880,11 +1887,13 @@ function TemplateCard({
 }
 
 function PreviewModal({
+  unsaved,
   template,
   onClose,
   onEdit,
   onDuplicate,
 }: {
+  unsaved: boolean;
   template: InspectionTemplate;
   onClose: () => void;
   onEdit: () => void;
@@ -1895,7 +1904,7 @@ function PreviewModal({
     'PUBLICADO';
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/60 p-4 flex items-center justify-center">
+    <div role="dialog" aria-modal="true" aria-label="Prévia do modelo" className="fixed inset-0 z-50 bg-slate-950/60 p-4 flex items-center justify-center">
       <div className="bg-white w-full max-w-4xl max-h-[92vh] rounded-xl shadow-2xl overflow-hidden flex flex-col">
         <header className="p-5 bg-slate-50 border-b border-slate-200 flex items-start justify-between gap-4">
           <div>
@@ -1944,6 +1953,7 @@ function PreviewModal({
         </header>
 
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          {unsaved && <p className="text-sm text-teal-800 bg-teal-50 p-3 rounded">Prévia das alterações em edição. Nenhum dado foi salvo ou publicado.</p>}
           <section>
             <h3 className="text-xs uppercase tracking-wider font-bold text-slate-500">
               Descrição
@@ -2112,7 +2122,7 @@ function PreviewModal({
                   size={15}
                 />
 
-                Editar rascunho
+                {unsaved ? 'Voltar à edição' : 'Editar rascunho'}
               </button>
             )}
           </div>
@@ -2180,9 +2190,9 @@ function ResponsePreview({
 
     case 'SINGLE_SELECT':
       return (
-        <div className="w-44 px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-400">
-          Selecionar opção...
-        </div>
+        <ul aria-label="Opções de resposta" className="min-w-44 px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-600 space-y-2">
+          {item.options?.map((option) => <li key={option.id}>○ {option.label}</li>)}
+        </ul>
       );
 
     case 'MULTI_SELECT':
@@ -2198,6 +2208,7 @@ function ResponsePreview({
 }
 
 type EditorModalProps = {
+  onPreview: () => void;
   isSaving: boolean;
   editingTemplate:
     | InspectionTemplate
@@ -2286,6 +2297,7 @@ type EditorModalProps = {
 };
 
 function EditorModal({
+  onPreview,
   isSaving,
   editingTemplate,
   formTitle,
@@ -2657,6 +2669,7 @@ function EditorModal({
           </p>
 
           <div className="flex flex-col sm:flex-row gap-2">
+            <button type="button" disabled={isSaving} onClick={onPreview} className="px-4 py-2 border border-teal-300 text-teal-800 rounded-lg text-sm font-semibold">Prévia do checklist</button>
             <button
               type="button" disabled={isSaving}
               onClick={
