@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import axios from 'axios';
 
@@ -125,6 +125,7 @@ function getApiErrorMessage(
 }
 
 export default function NewInspectionPage() {
+  const submittingRef = useRef(false);
   const router =
     useRouter();
 
@@ -510,6 +511,7 @@ export default function NewInspectionPage() {
       event: React.FormEvent
     ) => {
       event.preventDefault();
+      if (submittingRef.current || !session || !canPlanInspections(session.profile)) return;
 
       setErrorMessage(null);
 
@@ -553,7 +555,7 @@ export default function NewInspectionPage() {
         return;
       }
 
-      if (!selectedTemplateVersionId) {
+      if (!modelosPublicados.some((modelo) => modelo.versaoId === Number(selectedTemplateVersionId))) {
         setErrorMessage('Selecione um modelo de inspeção publicado.');
         return;
       }
@@ -606,6 +608,7 @@ export default function NewInspectionPage() {
         return;
       }
 
+      submittingRef.current = true;
       setIsSubmitting(
         true
       );
@@ -620,7 +623,7 @@ export default function NewInspectionPage() {
         const normalizedObservation =
           observacoes.trim();
 
-        await inspecaoService.criar(
+        const created = await inspecaoService.criar(
           {
             descricao:
               descricao.trim(),
@@ -658,7 +661,7 @@ export default function NewInspectionPage() {
         );
 
         router.push(
-          '/inspections?created=true'
+          `/inspections?created=true&inspectionId=${created.id}`
         );
       } catch (error: unknown) {
         console.error(
@@ -677,6 +680,7 @@ export default function NewInspectionPage() {
             : 'Não foi possível comunicar com a API para criar a inspeção.'
         );
       } finally {
+        submittingRef.current = false;
         setIsSubmitting(
           false
         );
@@ -795,9 +799,7 @@ export default function NewInspectionPage() {
 
                 <select
                   required
-                  value={
-                    selectedClienteId
-                  }
+                  aria-label="Cliente" value={selectedClienteId}
                   onChange={(
                     event
                   ) =>
@@ -857,9 +859,7 @@ export default function NewInspectionPage() {
 
                 <select
                   required
-                  value={
-                    selectedLocalId
-                  }
+                  aria-label="Local" value={selectedLocalId}
                   disabled={
                     !selectedClienteId ||
                     isLoadingLocais
@@ -923,9 +923,7 @@ export default function NewInspectionPage() {
 
                 <select
                   required
-                  value={
-                    selectedEquipamentoId
-                  }
+                  aria-label="Equipamento" value={selectedEquipamentoId}
                   disabled={
                     !selectedLocalId ||
                     isLoadingEquipamentos
@@ -1050,7 +1048,7 @@ export default function NewInspectionPage() {
                 </label>
                 <select
                   required
-                  value={selectedTemplateVersionId}
+                  aria-label="Versão publicada" value={selectedTemplateVersionId}
                   onChange={(event) => setSelectedTemplateVersionId(event.target.value)}
                   className="w-full py-2.5 px-3 border border-slate-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#10b981]"
                 >
@@ -1073,9 +1071,7 @@ export default function NewInspectionPage() {
                 <input
                   type="text"
                   required
-                  value={
-                    descricao
-                  }
+                  aria-label="Título da inspeção" value={descricao}
                   onChange={(
                     event
                   ) =>
@@ -1102,9 +1098,7 @@ export default function NewInspectionPage() {
                   min={
                     getMinimumScheduledDate()
                   }
-                  value={
-                    dataAgendada
-                  }
+                  aria-label="Prazo da inspeção" value={dataAgendada}
                   onChange={(
                     event
                   ) =>
@@ -1126,9 +1120,7 @@ export default function NewInspectionPage() {
 
                 <select
                   required
-                  value={
-                    selectedTecnicoId
-                  }
+                  aria-label="Técnico" value={selectedTecnicoId}
                   onChange={(
                     event
                   ) =>
@@ -1228,9 +1220,7 @@ export default function NewInspectionPage() {
 
                 <textarea
                   rows={4}
-                  value={
-                    observacoes
-                  }
+                  aria-label="Instruções ao técnico" value={observacoes}
                   onChange={(
                     event
                   ) =>

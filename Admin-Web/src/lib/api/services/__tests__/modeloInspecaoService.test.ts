@@ -174,3 +174,18 @@ it('refuses to republish an already published template', async () => {
   await expect(modeloInspecaoService.publicar('1')).rejects.toThrow('Somente rascunhos');
   expect(apiClient.post).not.toHaveBeenCalled();
 });
+
+it('offers every published version, loads following pages and excludes drafts', async () => {
+  jest.mocked(apiClient.get).mockImplementation(async (url, config) => {
+    if (url === '/inspection-templates') return { data: {
+      content: config?.params.page === 0 ? [{ ...detail, status: 'ACTIVE' }] : [{ ...detail, id: 2, status: 'DRAFT' }],
+      number: config?.params.page, totalPages: 2, totalElements: 2, size: 1,
+    } };
+    return { data: [{ id: 8, versionNumber: 2 }, { id: 7, versionNumber: 1, titleSnapshot: 'Título original' }] };
+  });
+  expect(await modeloInspecaoService.listarPublicados()).toEqual([
+    { versaoId: 8, modeloId: 1, titulo: 'Compressor', categoria: 'Mecânica', versao: 2 },
+    { versaoId: 7, modeloId: 1, titulo: 'Título original', categoria: 'Mecânica', versao: 1 },
+  ]);
+  expect(apiClient.get).not.toHaveBeenCalledWith('/inspection-templates/2/versions');
+});
