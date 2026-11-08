@@ -90,3 +90,28 @@ it('does not report success when an update fails', async () => {
   expect(apiClient.post).not.toHaveBeenCalled();
   expect(apiClient.delete).not.toHaveBeenCalled();
 });
+
+it('loads sections and items in their persisted display order', async () => {
+  jest.mocked(apiClient.get).mockResolvedValue({ data: { ...detail, sections: [
+    { ...detail.sections[0], id: 12, displayOrder: 2 },
+    { ...detail.sections[0], id: 11, displayOrder: 1, items: [{ ...item, id: 22, displayOrder: 2 }, item] },
+  ] } });
+  const result = await modeloInspecaoService.buscarPorId('1');
+  expect(result.sections.map((section) => section.id)).toEqual(['11', '12']);
+  expect(result.sections[0].items.map((entry) => entry.id)).toEqual(['21', '22']);
+});
+
+it('deletes removed sections only after all remaining edits succeed', async () => {
+  jest.mocked(apiClient.get).mockResolvedValue({ data: { ...detail, sections: [
+    detail.sections[0], { ...detail.sections[0], id: 12, displayOrder: 2 },
+  ] } });
+  await modeloInspecaoService.salvarRascunho('1', draft());
+  expect(apiClient.delete).toHaveBeenCalledWith('/inspection-templates/1/sections/12');
+  expect(jest.mocked(apiClient.delete).mock.invocationCallOrder[0]).toBeGreaterThan(jest.mocked(apiClient.put).mock.invocationCallOrder.at(-1)!);
+});
+
+it('rejects blank section names without sending writes', async () => {
+  const data = draft(); data.sections[0].title = '  ';
+  await expect(modeloInspecaoService.salvarRascunho('1', data)).rejects.toThrow('nome');
+  expect(apiClient.put).not.toHaveBeenCalled();
+});
