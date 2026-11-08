@@ -90,6 +90,14 @@ export interface TemplateSection {
   items: TemplateItem[];
 }
 
+export interface TemplateVersion {
+  id: number;
+  versionNumber: number;
+  publishedAt?: string;
+  publishedBy?: number;
+  titleSnapshot?: string;
+}
+
 export interface Template {
   id: string;
   title: string;
@@ -100,6 +108,7 @@ export interface Template {
   updatedAt: string;
   publishedAt?: string;
   publishedBy?: string;
+  publishedVersions?: TemplateVersion[];
 }
 
 // Inspections

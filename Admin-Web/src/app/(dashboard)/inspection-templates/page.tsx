@@ -982,6 +982,7 @@ export default function TemplatesPage() {
     if (statusToSave === 'PUBLICADO') {
       const errors = validateTemplateForPublish(formTitle, formCategory, sections);
       if (errors.length) { setEditorError(errors.join(' ')); return; }
+      if (!window.confirm('Publicar este modelo? A versão publicada ficará imutável.')) return;
     }
     savingRef.current = true;
     setIsSaving(true);
@@ -1535,15 +1536,7 @@ export default function TemplatesPage() {
               </h3>
 
               <p className="text-xs text-slate-600 leading-5 mt-1">
-                Rascunhos recém-criados
-                podem ser publicados.
-                Depois da publicação,
-                a versão passa a ser
-                somente leitura. Edição
-                e criação de novas versões
-                de modelos existentes
-                ainda não estão disponíveis
-                neste editor.
+                Rascunhos podem ser editados e publicados. A publicação é validada e gera uma versão imutável. Use Copiar para criar outro modelo sem alterar o original. Criar uma nova versão no mesmo modelo ainda não está disponível.
               </p>
             </div>
           </div>
@@ -1954,6 +1947,16 @@ function PreviewModal({
 
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
           {unsaved && <p className="text-sm text-teal-800 bg-teal-50 p-3 rounded">Prévia das alterações em edição. Nenhum dado foi salvo ou publicado.</p>}
+          {!!template.publishedVersions?.length && (
+            <section aria-label="Versões publicadas" className="border rounded-lg p-4 space-y-2">
+              <h3 className="font-semibold">Versões publicadas</h3>
+              <ul className="space-y-2 text-sm">
+                {[...template.publishedVersions].sort((a, b) => b.versionNumber - a.versionNumber).map((version) => (
+                  <li key={version.id}>v{version.versionNumber} · ID {version.id} · {version.titleSnapshot ?? template.title} · {formatDate(version.publishedAt)}{version.publishedBy ? ` · Usuário #${version.publishedBy}` : ''}</li>
+                ))}
+              </ul>
+            </section>
+          )}
           <section>
             <h3 className="text-xs uppercase tracking-wider font-bold text-slate-500">
               Descrição
