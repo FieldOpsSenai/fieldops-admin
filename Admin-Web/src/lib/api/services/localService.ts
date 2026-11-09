@@ -1,5 +1,5 @@
 import apiClient from '../axios';
-import { getPageContent } from './apiPage';
+import { getPageContent, mapApiPage, type ApiPage, type CadastroQuery } from './apiPage';
 
 export interface LocalDTO {
   id: number;
@@ -45,6 +45,12 @@ function fromApiSite(site: ApiSite): LocalDTO {
 }
 
 export const localService = {
+  async listarPagina(query: CadastroQuery, signal?: AbortSignal): Promise<ApiPage<LocalDTO>> {
+    const response = await apiClient.get<ApiPage<ApiSite>>('/sites', {
+      params: { page: query.page ?? 0, size: query.size ?? 10, name: query.search || undefined, status: query.status, clientId: query.clientId, sort: 'name,asc' }, signal,
+    });
+    return mapApiPage(response.data, fromApiSite);
+  },
   async listarTodos(): Promise<LocalDTO[]> {
     const response = await apiClient.get<ApiSite[] | { content?: ApiSite[] }>('/sites', {
       params: { size: 200 },

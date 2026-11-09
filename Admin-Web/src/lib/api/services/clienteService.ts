@@ -1,5 +1,5 @@
 import apiClient from '../axios';
-import { getPageContent } from './apiPage';
+import { getPageContent, mapApiPage, type ApiPage, type CadastroQuery } from './apiPage';
 
 export interface ClienteDTO {
   id: number;
@@ -45,6 +45,12 @@ function fromApiClient(client: ApiClient): ClienteDTO {
 }
 
 export const clienteService = {
+  async listarPagina(query: CadastroQuery, signal?: AbortSignal): Promise<ApiPage<ClienteDTO>> {
+    const response = await apiClient.get<ApiPage<ApiClient>>('/clients', {
+      params: { page: query.page ?? 0, size: query.size ?? 10, search: query.search || undefined, status: query.status, sort: 'name,asc' }, signal,
+    });
+    return mapApiPage(response.data, fromApiClient);
+  },
   async listar(): Promise<ClienteDTO[]> {
     const response = await apiClient.get<ApiClient[] | { content?: ApiClient[] }>('/clients', {
       params: { size: 200 },
