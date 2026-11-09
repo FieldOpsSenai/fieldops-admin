@@ -276,9 +276,7 @@ export default function NewInspectionPage() {
             [
               collectPages((page) => clienteService.listarPagina({ page, size: 100, status: 'ACTIVE' })),
 
-              usuarioService.listarPorPerfil(
-                'TECNICO'
-              ),
+              usuarioService.listarTecnicosAtivos(),
               modeloInspecaoService.listarPublicados(),
             ]
           );
@@ -306,7 +304,7 @@ export default function NewInspectionPage() {
           setTecnicos(
             tecnicosResult.value.filter(
               (tecnico) =>
-                tecnico.ativo
+                tecnico.ativo && tecnico.perfil === 'TECNICO'
             )
           );
         }
@@ -481,7 +479,7 @@ export default function NewInspectionPage() {
       }
 
       if (
-        !selectedTecnicoId
+        !selectedTecnico?.ativo || selectedTecnico.perfil !== 'TECNICO'
       ) {
         setErrorMessage(
           'Selecione o técnico responsável.'
