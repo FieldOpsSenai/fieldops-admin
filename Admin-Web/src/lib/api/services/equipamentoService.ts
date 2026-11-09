@@ -17,6 +17,7 @@ export interface EquipamentoRequest {
   numeroSerie: string;
   tipo?: string;
   localId: number;
+  qrCode?: string;
 }
 
 interface ApiEquipment {
@@ -69,7 +70,7 @@ export const equipamentoService = {
       assetNumber: data.numeroSerie,
       serialNumber: data.numeroSerie,
       model: data.tipo || data.nome,
-      qrCode: data.numeroSerie,
+      qrCode: data.qrCode || crypto.randomUUID(),
       status: 'ACTIVE',
     });
     return fromApiEquipment(response.data);
@@ -94,5 +95,11 @@ export const equipamentoService = {
 
   async inativar(id: number): Promise<void> {
     await apiClient.patch(`/equipment/${id}/status`, { status: 'INACTIVE' });
+  },
+
+  async buscarPorQr(qrCode: string): Promise<EquipamentoDTO> {
+    if (!qrCode.trim()) throw new Error('Informe um QR Code válido.');
+    const response = await apiClient.get<ApiEquipment>(`/equipment/by-qr/${encodeURIComponent(qrCode.trim())}`);
+    return fromApiEquipment(response.data);
   },
 };
