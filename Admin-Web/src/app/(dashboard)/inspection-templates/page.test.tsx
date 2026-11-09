@@ -55,3 +55,21 @@ it('offers retry after a loading failure without showing demo records', async ()
   expect(await screen.findByRole('heading', { name: 'Modelo salvo' })).toBeInTheDocument();
   expect(modeloInspecaoService.listarTodos).toHaveBeenCalledTimes(2);
 });
+
+it('moves sections with their items and saves the new order', async () => {
+  const original = { ...template, sections: [
+    { id: '10', title: 'Primeira', order: 1, items: [] },
+    { id: '11', title: 'Segunda', order: 2, items: [] },
+  ] };
+  jest.mocked(modeloInspecaoService.listarTodos).mockResolvedValue([original] as never);
+  jest.mocked(modeloInspecaoService.salvarRascunho).mockResolvedValue(original as never);
+  render(<TemplatesPage />);
+  fireEvent.click(await screen.findByTitle('Editar rascunho'));
+  expect(screen.getByRole('button', { name: 'Subir seção 1' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Subir seção 2' }));
+  expect(screen.getByLabelText('Nome da seção 1')).toHaveValue('Segunda');
+  fireEvent.click(screen.getByRole('button', { name: 'Salvar rascunho' }));
+  await waitFor(() => expect(modeloInspecaoService.salvarRascunho).toHaveBeenCalledWith('1', expect.objectContaining({ sections: [
+    { ...original.sections[1], order: 1 }, { ...original.sections[0], order: 2 },
+  ] })));
+});
