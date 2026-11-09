@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 
 import { getApiErrorMessage } from '@/lib/api/errorMessage';
+import { validateTemplateItems } from '@/lib/templates/validation';
 import TopHeader from '@/components/layout/TopHeader';
 import { modeloInspecaoService } from '@/lib/api/services';
 
@@ -63,7 +64,9 @@ const RESPONSE_TYPE_LABELS: Record<
   ResponseType,
   string
 > = {
-  TEXT: 'Texto',
+  TEXT: 'Texto curto',
+  LONG_TEXT: 'Texto longo',
+  YES_NO: 'Sim / Não',
   NUMERIC: 'Numérico',
   DATE: 'Data',
   SINGLE_SELECT: 'Seleção única',
@@ -73,6 +76,8 @@ const RESPONSE_TYPE_LABELS: Record<
 
 const PUBLISHABLE_RESPONSE_TYPES: ResponseType[] = [
   'TEXT',
+  'LONG_TEXT',
+  'YES_NO',
   'NUMERIC',
   'DATE',
   'SINGLE_SELECT',
@@ -968,6 +973,8 @@ export default function TemplatesPage() {
       return;
     }
     const sections = normalizeOrders(cloneSections(formSections));
+    const itemErrors = validateTemplateItems(sections);
+    if (itemErrors.length) { setEditorError(itemErrors.join(' ')); return; }
     if (sections.some((section) => !section.title.trim() || section.title.trim().length > 200)) {
       setEditorError('Cada seção deve ter um nome com até 200 caracteres.');
       return;
@@ -2131,6 +2138,10 @@ function ResponsePreview({
   switch (
     item.responseType
   ) {
+    case 'LONG_TEXT':
+      return <div className="w-52 h-20 px-3 py-2 bg-slate-50 border rounded text-xs text-slate-400">Resposta em texto longo…</div>;
+    case 'YES_NO':
+      return <div className="flex gap-2 text-xs"><span className="border rounded px-3 py-2">Sim</span><span className="border rounded px-3 py-2">Não</span></div>;
     case 'BOOLEAN':
       return (
         <div className="flex gap-1 text-xs">
@@ -2741,6 +2752,8 @@ function ItemEditor({
 
           <input
             type="text"
+            aria-label={`Enunciado do item ${sectionIndex + 1}.${itemIndex + 1}`}
+            maxLength={500}
             value={
               item.label
             }
@@ -2784,6 +2797,7 @@ function ItemEditor({
           </label>
 
           <select
+            aria-label={`Tipo de resposta do item ${sectionIndex + 1}.${itemIndex + 1}`}
             value={
               item.responseType
             }
