@@ -1004,7 +1004,7 @@ export default function NewInspectionPage() {
                 <input
                   type="text"
                   required
-                  aria-label="Título da inspeção" value={descricao}
+                  aria-label="Título da inspeção" maxLength={300} value={descricao}
                   onChange={(
                     event
                   ) =>
@@ -1153,7 +1153,7 @@ export default function NewInspectionPage() {
 
                 <textarea
                   rows={4}
-                  aria-label="Instruções ao técnico" value={observacoes}
+                  aria-label="Instruções ao técnico" maxLength={2000} value={observacoes}
                   onChange={(
                     event
                   ) =>

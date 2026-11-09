@@ -87,10 +87,21 @@ export const inspecaoService = {
       throw new Error('Cliente, local e versão publicada do modelo são obrigatórios para criar uma inspeção.');
     }
 
+    if (!data.descricao.trim() || data.descricao.trim().length > 300) {
+      throw new Error('Informe um título com até 300 caracteres.');
+    }
+    if ((data.observacoes?.trim().length ?? 0) > 2000) {
+      throw new Error('As instruções devem ter até 2000 caracteres.');
+    }
+    const deadline = new Date(data.dataAgendada);
+    if (!Number.isFinite(deadline.getTime()) || deadline.getTime() <= Date.now()) {
+      throw new Error('Informe um prazo futuro válido.');
+    }
+
     const dateTime = data.dataAgendada.replace(' ', 'T');
     const [dueDate, dueTime] = dateTime.split('T');
     const response = await apiClient.post<ApiInspection>('/inspections', {
-      title: data.descricao,
+      title: data.descricao.trim(),
       templateVersionId: data.templateVersionId,
       clientId: data.clienteId,
       siteId: data.localId,
@@ -99,7 +110,7 @@ export const inspecaoService = {
       priority: data.prioridade ?? 'MEDIUM',
       dueDate,
       dueTime,
-      supervisorInstructions: data.observacoes,
+      supervisorInstructions: data.observacoes?.trim() || undefined,
     });
     return fromApiInspection(response.data);
   },

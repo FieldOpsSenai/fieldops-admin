@@ -22,3 +22,13 @@ it('does not schedule without a published version', async () => {
   await expect(inspecaoService.criar({ ...request, templateVersionId: undefined })).rejects.toThrow('versão publicada');
   expect(apiClient.post).not.toHaveBeenCalled();
 });
+
+it.each([
+  [{ dataAgendada: '2000-01-01T12:00:00' }, 'prazo futuro'],
+  [{ dataAgendada: 'inválida' }, 'prazo futuro'],
+  [{ descricao: ' ' }, 'título'],
+  [{ observacoes: 'a'.repeat(2001) }, 'instruções'],
+])('rejects invalid scheduling information before contacting the API', async (changes, message) => {
+  await expect(inspecaoService.criar({ ...request, ...changes })).rejects.toThrow(message);
+  expect(apiClient.post).not.toHaveBeenCalled();
+});
