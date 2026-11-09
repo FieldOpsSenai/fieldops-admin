@@ -25,18 +25,19 @@ interface ApiSite {
   city?: string;
   state?: string;
   zipCode?: string;
+  description?: string;
+  latitude?: number;
+  longitude?: number;
+  contactName?: string;
+  contactPhone?: string;
   status: 'ACTIVE' | 'INACTIVE';
 }
 
 function fromApiSite(site: ApiSite): LocalDTO {
-  const address = [site.address, site.city, site.state, site.zipCode]
-    .filter(Boolean)
-    .join(', ');
-
   return {
     id: site.id,
     nome: site.name,
-    endereco: address,
+    endereco: site.address ?? '',
     clienteId: site.clientId,
     clienteNome: site.clientName,
     ativo: site.status === 'ACTIVE',
@@ -68,11 +69,24 @@ export const localService = {
   },
 
   async atualizar(id: number, data: LocalRequest): Promise<LocalDTO> {
-    const response = await apiClient.put<LocalDTO>(`/locais/${id}`, data);
-    return response.data;
+    const existing = (await apiClient.get<ApiSite>(`/sites/${id}`)).data;
+    const response = await apiClient.put<ApiSite>(`/sites/${id}`, {
+      clientId: data.clienteId,
+      name: data.nome,
+      address: data.endereco,
+      description: existing.description,
+      city: existing.city,
+      state: existing.state,
+      zipCode: existing.zipCode,
+      latitude: existing.latitude,
+      longitude: existing.longitude,
+      contactName: existing.contactName,
+      contactPhone: existing.contactPhone,
+    });
+    return fromApiSite(response.data);
   },
 
   async inativar(id: number): Promise<void> {
-    await apiClient.delete(`/locais/${id}`);
+    await apiClient.patch(`/sites/${id}/status`, { status: 'INACTIVE' });
   },
 };
