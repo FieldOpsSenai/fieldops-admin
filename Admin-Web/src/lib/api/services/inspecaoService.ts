@@ -24,7 +24,7 @@ export interface InspecaoRequest {
   descricao: string;
   dataAgendada: string; // ISO string e.g. "2026-08-31T14:30:00"
   observacoes?: string;
-  equipamentoId: number;
+  equipamentoId?: number;
   usuarioId: number;
   clienteId?: number;
   localId?: number;

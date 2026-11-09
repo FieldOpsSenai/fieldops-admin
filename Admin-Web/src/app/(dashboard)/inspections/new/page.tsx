@@ -443,7 +443,7 @@ export default function NewInspectionPage() {
 
       setErrorMessage(null);
       if (!selectedCliente?.ativo || !selectedLocal?.ativo || selectedLocal.clienteId !== selectedCliente.id ||
-          !selectedEquipamento?.ativo || selectedEquipamento.localId !== selectedLocal.id) {
+          (selectedEquipamentoId && (!selectedEquipamento?.ativo || selectedEquipamento.localId !== selectedLocal.id))) {
         setErrorMessage('Selecione cliente, local e equipamento ativos com vínculos compatíveis.');
         return;
       }
@@ -463,16 +463,6 @@ export default function NewInspectionPage() {
       ) {
         setErrorMessage(
           'Selecione o local da inspeção.'
-        );
-
-        return;
-      }
-
-      if (
-        !selectedEquipamentoId
-      ) {
-        setErrorMessage(
-          'A API atual exige um equipamento para criar a inspeção.'
         );
 
         return;
@@ -581,10 +571,7 @@ export default function NewInspectionPage() {
                   ? 'CRITICAL'
                   : 'MEDIUM',
 
-            equipamentoId:
-              Number(
-                selectedEquipamentoId
-              ),
+            equipamentoId: selectedEquipamentoId ? Number(selectedEquipamentoId) : undefined,
 
             usuarioId:
               Number(
@@ -843,7 +830,7 @@ export default function NewInspectionPage() {
               <div>
                 <label className="flex items-center justify-between text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
                   <span>
-                    Equipamento *
+                    Equipamento (opcional)
                   </span>
 
                   {isLoadingEquipamentos && (
@@ -855,7 +842,6 @@ export default function NewInspectionPage() {
                 </label>
 
                 <select
-                  required
                   aria-label="Equipamento" value={selectedEquipamentoId}
                   disabled={
                     !selectedLocalId ||
@@ -877,7 +863,7 @@ export default function NewInspectionPage() {
                       : equipamentos.length ===
                           0
                         ? 'Nenhum equipamento ativo encontrado'
-                        : 'Selecione o equipamento...'}
+                        : 'Sem equipamento (opcional)'}
                   </option>
 
                   {equipamentos.map(

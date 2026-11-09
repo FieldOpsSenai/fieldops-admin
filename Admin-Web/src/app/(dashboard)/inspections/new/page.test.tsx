@@ -58,6 +58,14 @@ it('prevents repeated submission while creation is pending', async () => {
   await act(async () => finish({ id: 77 } as never));
 });
 
+it('schedules an inspection without an equipment when it is not applicable', async () => {
+  render(<NewInspectionPage />);
+  await fillForm();
+  fireEvent.change(screen.getByLabelText('Equipamento'), { target: { value: '' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Agendar Inspeção' }));
+  await waitFor(() => expect(inspecaoService.criar).toHaveBeenCalledWith(expect.objectContaining({ clienteId: 1, localId: 2, equipamentoId: undefined })));
+});
+
 it('ignores late responses from a previously selected client', async () => {
   let resolveOld!: (value: never) => void;
   jest.mocked(clienteService.listarPagina).mockResolvedValue(pageOf([client, { ...client, id: 5, nome: 'Cliente B' }]) as never);
