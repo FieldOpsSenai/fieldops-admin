@@ -32,3 +32,15 @@ it.each([
   await expect(inspecaoService.criar({ ...request, ...changes })).rejects.toThrow(message);
   expect(apiClient.post).not.toHaveBeenCalled();
 });
+
+it('sends the exact trimmed cancellation reason and retains audit metadata', async () => {
+  const result = { id: 77, status: 'CANCELED', canceledAt: '2026-11-08T12:00:00Z', canceledBy: 4, canceledReason: 'Cliente solicitou cancelamento' };
+  jest.mocked(apiClient.post).mockResolvedValue({ data: result });
+  await expect(inspecaoService.cancelar(77, ' Cliente solicitou cancelamento ')).resolves.toEqual(result);
+  expect(apiClient.post).toHaveBeenCalledWith('/inspections/77/cancel', { reason: result.canceledReason });
+});
+
+it('rejects cancellation without a sufficiently detailed reason', async () => {
+  await expect(inspecaoService.cancelar(77, 'curto')).rejects.toThrow('10 e 1000');
+  expect(apiClient.post).not.toHaveBeenCalled();
+});
