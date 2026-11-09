@@ -73,7 +73,13 @@ export const clienteService = {
   },
 
   async atualizar(id: number, data: ClienteRequest): Promise<ClienteDTO> {
-    const response = await apiClient.put<ClienteDTO>(`/clientes/${id}`, data);
-    return response.data;
+    const response = await apiClient.put<ApiClient>(`/clients/${id}`, {
+      name: data.nome,
+      legalName: data.nome,
+      document: formatDocument(data.cnpj),
+      phone: data.telefone,
+      email: data.email,
+    });
+    return fromApiClient(response.data);
   },
 };

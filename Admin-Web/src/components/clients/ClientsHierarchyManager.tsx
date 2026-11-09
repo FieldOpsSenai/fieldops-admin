@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import TopHeader from '@/components/layout/TopHeader';
+import { getApiErrorMessage } from '@/lib/api/errorMessage';
 import {
   Building2,
   MapPin,
@@ -22,10 +23,7 @@ import {
   Info,
   Phone,
   Mail,
-  FileText,
   Sparkles,
-  Layers,
-  ArrowUpDown,
   Filter,
 } from 'lucide-react';
 import {
@@ -116,17 +114,19 @@ export default function ClientsHierarchyManager({
   };
 
   // Load all hierarchy data from backend
-  const loadData = async (refresh = false) => {
-    if (refresh) setIsRefreshing(true);
-    else setIsLoading(true);
-    setErrorMessage(null);
-
+  const loadData = async () => {
     try {
       const [cRes, lRes, eRes] = await Promise.allSettled([
         clienteService.listar(),
         localService.listarTodos(),
         equipamentoService.listarTodos(),
       ]);
+
+      setErrorMessage(
+        [cRes, lRes, eRes].some((result) => result.status === 'rejected')
+          ? 'Não foi possível carregar todos os cadastros. Tente sincronizar novamente.'
+          : null
+      );
 
       let loadedClientes: ClienteDTO[] = [];
       let loadedLocais: LocalDTO[] = [];
@@ -169,15 +169,15 @@ export default function ClientsHierarchyManager({
   };
 
   useEffect(() => {
-    loadData();
+    // Initial API load; state changes happen after the requests settle.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadData();
   }, []);
 
-  // Update initialStep if prop changes
-  useEffect(() => {
-    if (initialStep) {
-      setCurrentStep(initialStep);
-    }
-  }, [initialStep]);
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    void loadData();
+  };
 
   // Derived statistics & mappings
   const locaisByCliente = useMemo(() => {
@@ -399,13 +399,7 @@ export default function ClientsHierarchyManager({
 
     try {
       if (editingCliente) {
-        let updated: ClienteDTO;
-        try {
-          updated = await clienteService.atualizar(editingCliente.id, payload);
-        } catch {
-          // Fallback optimistic update if backend does not yet implement PUT
-          updated = { ...editingCliente, ...payload };
-        }
+        const updated = await clienteService.atualizar(editingCliente.id, payload);
         setClientes((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
         if (selectedCliente?.id === updated.id) setSelectedCliente(updated);
         showToast(`Cliente "${updated.nome}" atualizado com sucesso!`);
@@ -439,10 +433,9 @@ export default function ClientsHierarchyManager({
           },
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao salvar cliente:', err);
-      const msg = err.response?.data?.mensagem || err.response?.data || err.message;
-      alert(`Falha ao salvar cliente: ${typeof msg === 'string' ? msg : 'Verifique os dados.'}`);
+      alert(`Falha ao salvar cliente: ${getApiErrorMessage(err)}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -466,18 +459,7 @@ export default function ClientsHierarchyManager({
 
     try {
       if (editingLocal) {
-        let updated: LocalDTO;
-        try {
-          updated = await localService.atualizar(editingLocal.id, payload);
-        } catch {
-          // Fallback optimistic update
-          const clientObj = clientes.find((c) => c.id === clienteIdNum);
-          updated = {
-            ...editingLocal,
-            ...payload,
-            clienteNome: clientObj?.nome || editingLocal.clienteNome,
-          };
-        }
+        const updated = await localService.atualizar(editingLocal.id, payload);
         setLocais((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
         if (selectedLocal?.id === updated.id) setSelectedLocal(updated);
         showToast(`Local "${updated.nome}" atualizado com sucesso!`);
@@ -518,10 +500,9 @@ export default function ClientsHierarchyManager({
           },
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao salvar local:', err);
-      const msg = err.response?.data?.mensagem || err.response?.data || err.message;
-      alert(`Falha ao salvar local: ${typeof msg === 'string' ? msg : 'Verifique os dados.'}`);
+      alert(`Falha ao salvar local: ${getApiErrorMessage(err)}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -546,18 +527,7 @@ export default function ClientsHierarchyManager({
 
     try {
       if (editingEquipamento) {
-        let updated: EquipamentoDTO;
-        try {
-          updated = await equipamentoService.atualizar(editingEquipamento.id, payload);
-        } catch {
-          // Fallback optimistic update
-          const localObj = locais.find((l) => l.id === localIdNum);
-          updated = {
-            ...editingEquipamento,
-            ...payload,
-            localNome: localObj?.nome || editingEquipamento.localNome,
-          };
-        }
+        const updated = await equipamentoService.atualizar(editingEquipamento.id, payload);
         setEquipamentos((prev) => prev.map((eq) => (eq.id === updated.id ? updated : eq)));
         if (selectedEquipamento?.id === updated.id) setSelectedEquipamento(updated);
         showToast(`Equipamento "${updated.nome}" atualizado com sucesso!`);
@@ -575,10 +545,9 @@ export default function ClientsHierarchyManager({
         setIsEquipModalOpen(false);
         showToast(`Equipamento "${enriched.nome}" cadastrado com sucesso!`);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao salvar equipamento:', err);
-      const msg = err.response?.data?.mensagem || err.response?.data || err.message;
-      alert(`Falha ao salvar equipamento: ${typeof msg === 'string' ? msg : 'Verifique os dados.'}`);
+      alert(`Falha ao salvar equipamento: ${getApiErrorMessage(err)}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -620,7 +589,7 @@ export default function ClientsHierarchyManager({
               <span>{errorMessage}</span>
             </div>
             <button
-              onClick={() => loadData(true)}
+              onClick={handleRefresh}
               className="font-bold underline text-red-800 hover:text-red-900"
             >
               Tentar novamente
@@ -641,7 +610,7 @@ export default function ClientsHierarchyManager({
 
           <div className="flex items-center gap-3">
             <button
-              onClick={() => loadData(true)}
+              onClick={handleRefresh}
               className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg shadow-xs transition-colors flex items-center gap-2 text-sm font-medium cursor-pointer"
               title="Recarregar todos os dados"
             >
@@ -1036,7 +1005,7 @@ export default function ClientsHierarchyManager({
             </span>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
+              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
               className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#10b981]"
             >
               <option value="ALL">Todos os status</option>

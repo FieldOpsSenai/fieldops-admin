@@ -36,7 +36,8 @@ function getSafeRedirect(
   if (
     !value ||
     !value.startsWith('/') ||
-    value.startsWith('//')
+    value.startsWith('//') ||
+    value.includes('\\')
   ) {
     return '/';
   }
@@ -169,11 +170,6 @@ function LoginContent() {
       } catch (
         error: unknown
       ) {
-        console.error(
-          'Falha no login:',
-          error
-        );
-
         if (
           axios.isAxiosError(
             error
@@ -209,7 +205,7 @@ function LoginContent() {
             status >= 500
           ) {
             setErrorMessage(
-              `A API retornou erro interno (${status}). Verifique os logs da API e a conexão com o banco de dados.`
+              'O serviço está indisponível. Tente novamente em alguns instantes.'
             );
 
             return;

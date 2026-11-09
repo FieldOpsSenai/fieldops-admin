@@ -69,10 +69,14 @@ describe('Hierarchy Services (Cliente, Local, Equipamento)', () => {
         email: 'beta2@test.com',
       };
       const updated = { id: 2, ...payload, ativo: true };
-      (apiClient.put as jest.Mock).mockResolvedValueOnce({ data: updated });
+      (apiClient.put as jest.Mock).mockResolvedValueOnce({ data: {
+        id: 2, name: payload.nome, document: payload.cnpj, phone: payload.telefone, email: payload.email, status: 'ACTIVE',
+      } });
 
       const result = await clienteService.atualizar(2, payload);
-      expect(apiClient.put).toHaveBeenCalledWith('/clientes/2', payload);
+      expect(apiClient.put).toHaveBeenCalledWith('/clients/2', {
+        name: payload.nome, legalName: payload.nome, document: '98.765.432/0001-99', phone: payload.telefone, email: payload.email,
+      });
       expect(result).toEqual(updated);
     });
   });
