@@ -1,5 +1,5 @@
 import apiClient from '../axios';
-import { getPageContent } from './apiPage';
+import { getPageContent, mapApiPage, type ApiPage } from './apiPage';
 
 export type InspecaoStatus = 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA';
 
@@ -32,7 +32,7 @@ export interface InspecaoRequest {
   prioridade?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 }
 
-interface ApiInspection {
+export interface ApiInspection {
   id: number;
   title: string;
   status: 'DRAFT' | 'ASSIGNED' | 'IN_PROGRESS' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'CANCELED';
@@ -42,6 +42,19 @@ interface ApiInspection {
   equipmentName?: string;
   technicianId?: number;
   technicianName?: string;
+  clientName?: string;
+  siteName?: string;
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  progress?: number;
+  overdue?: boolean;
+}
+
+export interface InspectionQuery {
+  page: number; size: number; name?: string; status?: ApiInspection['status'];
+  technicianName?: string; clientName?: string; priority?: ApiInspection['priority'];
+}
+export interface InspectionAuditEvent {
+  id: number; actorId: number; action: string; detail?: string; occurredAt: string;
 }
 
 function fromApiInspection(inspection: ApiInspection): InspecaoDTO {
@@ -79,6 +92,14 @@ export interface CancelamentoResponse {
 }
 
 export const inspecaoService = {
+  async listarPagina(query: InspectionQuery, signal?: AbortSignal): Promise<ApiPage<ApiInspection>> {
+    const response = await apiClient.get<ApiPage<ApiInspection>>('/inspections', { params: query, signal });
+    return mapApiPage(response.data, (item) => item);
+  },
+
+  async historico(id: number): Promise<InspectionAuditEvent[]> {
+    return (await apiClient.get<InspectionAuditEvent[]>(`/inspections/${id}/history`)).data;
+  },
   async listarTodas(): Promise<InspecaoDTO[]> {
     const response = await apiClient.get<ApiInspection[] | { content?: ApiInspection[] }>('/inspections', {
       params: { size: 200 },
