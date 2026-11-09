@@ -36,6 +36,24 @@ it('bloqueia requisições de outra origem antes de acessar a API', async () => 
   expect(fetchMock).not.toHaveBeenCalled();
 });
 
+it('aceita origem local que corresponde ao Host mesmo quando Next normaliza a URL', async () => {
+  fetchMock.mockResolvedValueOnce(Response.json({ accessToken: 'access-secret', refreshToken: 'refresh-secret', expiresIn: 900, user }));
+  const request = new NextRequest('http://localhost:3000/api/session', {
+    method: 'POST', headers: { host: '127.0.0.1:3000', origin: 'http://127.0.0.1:3000', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: user.email, password: 'password-test' }),
+  });
+  expect((await POST(request)).status).toBe(200);
+});
+
+it('continua bloqueando origem diferente do Host', async () => {
+  const request = new NextRequest('http://localhost:3000/api/session', {
+    method: 'POST', headers: { host: '127.0.0.1:3000', origin: 'http://evil.example', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: user.email, password: 'password-test' }),
+  });
+  expect((await POST(request)).status).toBe(403);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
 it('não restaura a sessão sem credencial no cookie', async () => {
   expect((await GET(new NextRequest('http://localhost/api/session'))).status).toBe(401);
   expect(fetchMock).not.toHaveBeenCalled();

@@ -13,8 +13,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for the auth token cookie set by sessionStore.ts after login
-  const token = request.cookies.get('fieldops_auth')?.value;
+  // Allow a refresh cookie to reach the app when the access cookie expired.
+  // The session endpoint validates the credentials and role with the API.
+  const token = request.cookies.get('fieldops_access')?.value || request.cookies.get('fieldops_refresh')?.value;
 
   if (!token) {
     // Redirect to login, preserving the intended destination
