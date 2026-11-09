@@ -70,6 +70,10 @@ export function canManageUsers(
   return isAdministrativeRole(profile);
 }
 
+export function canEditUsers(profile?: string | null): boolean {
+  return normalizeRole(profile) === 'ADMIN';
+}
+
 export function canManageMasterData(
   profile?: string | null
 ): boolean {

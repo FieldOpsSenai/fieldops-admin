@@ -17,6 +17,8 @@ export interface UsuarioRequest {
   perfil: Profile;
 }
 
+export type UsuarioUpdate = Omit<UsuarioRequest, 'senha'> & { senha?: string };
+
 interface ApiUser {
   id: number;
   name: string;
@@ -76,5 +78,15 @@ export const usuarioService = {
     await apiClient.patch<void>(`/users/${id}/status`, {
       status: 'INACTIVE',
     });
+  },
+
+  async atualizar(id: number, data: UsuarioUpdate): Promise<UsuarioDTO> {
+    const response = await apiClient.put<ApiUser>(`/users/${id}`, {
+      name: data.nome.trim(),
+      email: data.email.trim(),
+      role: toApiRole(data.perfil),
+      ...(data.senha ? { password: data.senha } : {}),
+    });
+    return fromApiUser(response.data);
   },
 };
