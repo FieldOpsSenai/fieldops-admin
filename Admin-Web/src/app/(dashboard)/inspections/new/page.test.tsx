@@ -9,7 +9,7 @@ jest.mock('@/components/layout/TopHeader', () => ({ __esModule: true, default: (
 jest.mock('@/stores/sessionStore', () => ({ useSessionStore: () => ({ session: { profile: 'SUPERVISOR' } }) }));
 jest.mock('@/lib/api/services', () => ({
   clienteService: { listarPagina: jest.fn() }, localService: { listarPagina: jest.fn() },
-  equipamentoService: { listarPagina: jest.fn() }, usuarioService: { listarPorPerfil: jest.fn() },
+  equipamentoService: { listarPagina: jest.fn() }, usuarioService: { listarTecnicosAtivos: jest.fn() },
   modeloInspecaoService: { listarPublicados: jest.fn() }, inspecaoService: { criar: jest.fn() },
 }));
 const client = { id: 1, nome: 'Cliente A', ativo: true };
@@ -22,7 +22,7 @@ beforeEach(() => {
   jest.mocked(clienteService.listarPagina).mockResolvedValue(pageOf([client]) as never);
   jest.mocked(localService.listarPagina).mockResolvedValue(pageOf([site]) as never);
   jest.mocked(equipamentoService.listarPagina).mockResolvedValue(pageOf([equipment]) as never);
-  jest.mocked(usuarioService.listarPorPerfil).mockResolvedValue([{ id: 4, nome: 'Técnico A', email: 'tecnico@example.test', ativo: true, perfil: 'TECNICO' }] as never);
+  jest.mocked(usuarioService.listarTecnicosAtivos).mockResolvedValue([{ id: 4, nome: 'Técnico A', email: 'tecnico@example.test', ativo: true, perfil: 'TECNICO' }] as never);
   jest.mocked(modeloInspecaoService.listarPublicados).mockResolvedValue([{ versaoId: 89, modeloId: 8, titulo: 'Modelo publicado', categoria: 'Mecânica', versao: 2 }]);
   jest.mocked(inspecaoService.criar).mockResolvedValue({ id: 77 } as never);
 });
@@ -83,4 +83,17 @@ it('clears dependent selections when changing the client and filters incompatibl
   expect(screen.getByLabelText('Local')).toHaveValue('');
   expect(screen.getByLabelText('Equipamento')).toHaveValue('');
   expect(screen.getByLabelText('Local')).toBeDisabled();
+});
+
+it('shows only active technicians even if lookup includes inactive or administrative users', async () => {
+  jest.mocked(usuarioService.listarTecnicosAtivos).mockResolvedValue([
+    { id: 4, nome: 'Técnico A', ativo: true, perfil: 'TECNICO' },
+    { id: 5, nome: 'Técnico inativo', ativo: false, perfil: 'TECNICO' },
+    { id: 6, nome: 'Supervisor', ativo: true, perfil: 'SUPERVISOR' },
+  ] as never);
+  render(<NewInspectionPage />);
+  await screen.findByLabelText('Técnico');
+  expect(screen.getByRole('option', { name: /Técnico A/ })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: /Técnico inativo/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: /Supervisor/ })).not.toBeInTheDocument();
 });

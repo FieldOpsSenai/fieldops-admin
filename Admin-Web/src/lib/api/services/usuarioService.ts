@@ -1,6 +1,6 @@
 import apiClient from '../axios';
 import type { Profile } from '@/types';
-import { getPageContent } from './apiPage';
+import { collectPages, getPageContent, type ApiPage } from './apiPage';
 
 export interface UsuarioDTO {
   id: number;
@@ -50,6 +50,12 @@ function toApiRole(profile: Profile): ApiUser['role'] {
 }
 
 export const usuarioService = {
+  async listarTecnicosAtivos(): Promise<UsuarioDTO[]> {
+    const users = await collectPages(async (page) => (await apiClient.get<ApiPage<ApiUser>>('/users', {
+      params: { role: 'TECHNICIAN', status: 'ACTIVE', page, size: 100 },
+    })).data);
+    return users.filter((user) => user.role === 'TECHNICIAN' && user.status === 'ACTIVE').map(fromApiUser);
+  },
   async listarTodos(): Promise<UsuarioDTO[]> {
     const response = await apiClient.get<ApiUser[] | { content?: ApiUser[] }>('/users', {
       params: { size: 200 },
