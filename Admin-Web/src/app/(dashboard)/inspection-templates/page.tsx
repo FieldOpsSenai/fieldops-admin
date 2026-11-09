@@ -2040,6 +2040,9 @@ function PreviewModal({
 
                                   <div className="flex flex-wrap gap-2 mt-2">
                                     <span className="px-2 py-0.5 rounded bg-slate-100 text-[11px] font-semibold text-slate-600">
+                                      {item.required ? 'Resposta obrigatória' : 'Resposta opcional'}
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded bg-slate-100 text-[11px] font-semibold text-slate-600">
                                       {
                                         RESPONSE_TYPE_LABELS[
                                           item
@@ -2050,14 +2053,13 @@ function PreviewModal({
 
                                     {item.allowObservation && (
                                       <span className="px-2 py-0.5 rounded bg-blue-50 text-[11px] font-semibold text-blue-700">
-                                        Observação
+                                        Observação obrigatória em não conformidade
                                       </span>
                                     )}
 
                                     {item.requireEvidenceOnNonConformity && (
                                       <span className="px-2 py-0.5 rounded bg-amber-50 text-[11px] font-semibold text-amber-700">
-                                        Evidência
-                                        em NC
+                                        Evidência obrigatória em não conformidade
                                       </span>
                                     )}
                                   </div>
@@ -2886,7 +2888,7 @@ function ItemEditor({
               className="accent-[#0f766e]"
             />
 
-            Permitir observação
+            Exigir observação em não conformidade
           </label>
 
           <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
@@ -2918,6 +2920,11 @@ function ItemEditor({
           </label>
         </div>
       </div>
+
+      <p className="text-xs text-slate-500">
+        As regras de observação e evidência são exigidas quando a resposta indica não conformidade.
+        A resposta obrigatória é uma regra independente.
+      </p>
 
       {item.responseType ===
         'SINGLE_SELECT' && (

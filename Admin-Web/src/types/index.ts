@@ -77,6 +77,7 @@ export interface TemplateItem {
   responseType: ResponseType;
   options?: TemplateOption[];
   required: boolean;
+  /** API observationRequiredOnFailure: exige observação em não conformidade. */
   allowObservation: boolean;
   requireEvidenceOnNonConformity: boolean;
   order: number;

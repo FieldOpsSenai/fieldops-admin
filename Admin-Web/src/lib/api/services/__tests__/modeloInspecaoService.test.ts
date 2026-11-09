@@ -140,3 +140,16 @@ it.each([['Sim', ' sim '], ['Sim', ''], ['Única']])('rejects invalid choice opt
   await expect(modeloInspecaoService.salvarRascunho('1', data)).rejects.toThrow('opções');
   expect(apiClient.put).not.toHaveBeenCalled();
 });
+
+it.each([true, false])('persists and reloads independent evidence rules set to %s', async (enabled) => {
+  const data = draft();
+  Object.assign(data.sections[0].items[0], { required: enabled, allowObservation: !enabled, requireEvidenceOnNonConformity: enabled });
+  jest.mocked(apiClient.get).mockResolvedValue({ data: { ...detail, sections: [{ ...detail.sections[0], items: [{
+    ...item, required: enabled, observationRequiredOnFailure: !enabled, evidenceRequiredOnFailure: enabled,
+  }] }] } });
+  const saved = await modeloInspecaoService.salvarRascunho('1', data);
+  expect(apiClient.put).toHaveBeenLastCalledWith('/inspection-templates/1/sections/11/items/21', expect.objectContaining({
+    required: enabled, observationRequiredOnFailure: !enabled, evidenceRequiredOnFailure: enabled,
+  }));
+  expect(saved.sections[0].items[0]).toMatchObject({ required: enabled, allowObservation: !enabled, requireEvidenceOnNonConformity: enabled });
+});
