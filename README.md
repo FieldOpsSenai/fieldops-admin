@@ -84,9 +84,17 @@ As instruções de instalação, configuração e execução serão adicionadas 
 
 ##  Testes
 
-Os testes automatizados devem ser executados antes da abertura de um Pull Request.
+O workflow `Admin CI` é executado em Pull Requests para `main` e em alterações na `main` que afetem `Admin-Web/`. Ele instala as dependências com `npm ci`, executa ESLint e Jest e valida o build do Next.js.
 
-As instruções específicas para execução dos testes serão documentadas conforme a implementação do projeto.
+Para executar as mesmas verificações localmente:
+
+```bash
+cd Admin-Web
+npm ci
+npm run lint
+npm test -- --ci --runInBand
+npm run build
+```
 
 ## Desenvolvimento
 
