@@ -126,6 +126,19 @@ describe('Hierarchy Services (Cliente, Local, Equipamento)', () => {
   });
 
   describe('equipamentoService', () => {
+    it('preserva QR e metadados ao editar o equipamento', async () => {
+      const equipment = { id: 100, name: 'Compressor', siteId: 10, qrCode: 'QR-100', manufacturer: 'Fabricante', assetNumber: 'PAT-1', status: 'ACTIVE' };
+      (apiClient.get as jest.Mock).mockResolvedValueOnce({ data: equipment });
+      (apiClient.put as jest.Mock).mockResolvedValueOnce({ data: { ...equipment, name: 'Compressor novo' } });
+      const result = await equipamentoService.atualizar(100, { nome: 'Compressor novo', numeroSerie: 'S-2', localId: 10 });
+      expect(apiClient.put).toHaveBeenCalledWith('/equipment/100', expect.objectContaining({ name: 'Compressor novo', qrCode: 'QR-100', manufacturer: 'Fabricante', assetNumber: 'PAT-1' }));
+      expect(result.qrCode).toBe('QR-100');
+    });
+
+    it('inativa equipamento pela mudança de status', async () => {
+      await equipamentoService.inativar(100);
+      expect(apiClient.patch).toHaveBeenCalledWith('/equipment/100/status', { status: 'INACTIVE' });
+    });
     it('deve listar equipamentos por local', async () => {
       const mockEquipamentos = [
         { id: 100, nome: 'Torno CNC', numeroSerie: 'TRN-001', localId: 10, ativo: true },
@@ -154,7 +167,7 @@ describe('Hierarchy Services (Cliente, Local, Equipamento)', () => {
       const result = await equipamentoService.cadastrar(payload);
       expect(apiClient.post).toHaveBeenCalledWith('/equipment', {
         siteId: payload.localId, name: payload.nome, assetNumber: payload.numeroSerie, serialNumber: payload.numeroSerie,
-        manufacturer: 'FieldOps QA', model: payload.tipo, qrCode: payload.numeroSerie, status: 'ACTIVE',
+        model: payload.tipo, qrCode: payload.numeroSerie, status: 'ACTIVE',
       });
       expect(result).toEqual(created);
     });
