@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Session } from '@/types';
+import { refreshSession } from '@/lib/auth/refreshSession';
 
 interface SessionState {
   session: Session | null;
@@ -40,7 +41,10 @@ export const useSessionStore = create<SessionState>((set) => ({
     const currentGeneration = generation;
     initialization = (async () => {
       try {
-        const response = await fetch('/api/session', { cache: 'no-store' });
+        let response = await fetch('/api/session', { cache: 'no-store' });
+        if (response.status === 401 && await refreshSession()) {
+          response = await fetch('/api/session', { cache: 'no-store' });
+        }
         const data = response.ok ? await response.json() : null;
         if (generation === currentGeneration) set({ session: data?.session ?? null, isInitialized: true });
       } catch {

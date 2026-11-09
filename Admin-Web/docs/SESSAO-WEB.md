@@ -10,3 +10,9 @@ O navegador envia as credenciais para a rota Next.js `/api/session`. Essa rota p
 - Requisições que alteram dados rejeitam origem externa. A autorização final continua sob responsabilidade da API.
 
 O cliente web usa sempre `/api/v1` na mesma origem. Configure o backend por `FIELDOPS_API_URL` ou `FIELDOPS_API_INTERNAL_URL`; não redirecione o navegador diretamente ao backend.
+
+## Renovação — PBI-010
+
+Uma resposta 401 inicia uma única chamada a `/api/session/refresh`, compartilhada entre requisições concorrentes. Após sucesso, a chamada original é repetida no máximo uma vez. A restauração da sessão também tenta renovar um cookie de acesso expirado.
+
+Falhas definitivas (401/403) removem os cookies e levam ao login. Falhas transitórias (rede/5xx) preservam as credenciais para uma nova tentativa. Logout cancela uma renovação em andamento. Quando a API retorna um refresh token rotacionado, ele substitui o cookie anterior.
