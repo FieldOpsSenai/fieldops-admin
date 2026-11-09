@@ -473,9 +473,9 @@ export default function InspectionsPage() {
       const reason =
         cancellationReason.trim();
 
-      if (!reason) {
+      if (reason.length < 10 || reason.length > 1000) {
         setCancelError(
-          'Informe o motivo do cancelamento.'
+          'Informe um motivo entre 10 e 1000 caracteres.'
         );
 
         return;
@@ -490,38 +490,11 @@ export default function InspectionsPage() {
       );
 
       try {
-        const previousObservation =
-          inspectionToCancel.observacoes
-            ?.trim();
-
-        const cancellationObservation =
-          previousObservation
-            ? `[Cancelamento: ${reason}]\n${previousObservation}`
-            : `[Cancelamento: ${reason}]`;
-
-        const updated =
-          await inspecaoService.atualizarStatus(
-            inspectionToCancel.id,
-            {
-              status:
-                'CANCELADA',
-
-              observacoes:
-                cancellationObservation,
-            }
-          );
-
-        setInspecoes(
-          (current) =>
-            current.map(
-              (inspection) =>
-                inspection.id ===
-                updated.id
-                  ? updated
-                  : inspection
-            )
-        );
-
+        const updated = await inspecaoService.cancelar(inspectionToCancel.id, reason);
+        setInspecoes((current) => current.map((inspection) => inspection.id === updated.id ? {
+          ...inspection, status: 'CANCELADA', statusApi: updated.status,
+          canceladoEm: updated.canceledAt, canceladoPor: updated.canceledBy, motivoCancelamento: updated.canceledReason,
+        } : inspection));
         setInspectionToCancel(
           null
         );
@@ -1204,7 +1177,7 @@ export default function InspectionsPage() {
                 </label>
 
                 <textarea
-                  required
+                  required minLength={10} maxLength={1000} aria-label="Motivo do cancelamento"
                   rows={4}
                   value={
                     cancellationReason

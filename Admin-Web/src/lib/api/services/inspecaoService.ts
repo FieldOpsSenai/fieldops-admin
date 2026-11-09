@@ -14,6 +14,10 @@ export interface InspecaoDTO {
   equipamentoNome?: string;
   usuarioId: number;
   usuarioNome?: string;
+  statusApi?: ApiInspection['status'];
+  canceladoEm?: string;
+  canceladoPor?: number;
+  motivoCancelamento?: string;
 }
 
 export interface InspecaoRequest {
@@ -55,6 +59,7 @@ function fromApiInspection(inspection: ApiInspection): InspecaoDTO {
     id: inspection.id,
     descricao: inspection.title,
     status,
+    statusApi: inspection.status,
     dataAgendada: inspection.dueTime && !scheduled.includes('T')
       ? `${scheduled}T${inspection.dueTime}`
       : scheduled,
@@ -65,9 +70,12 @@ function fromApiInspection(inspection: ApiInspection): InspecaoDTO {
   };
 }
 
-export interface InspecaoStatusUpdate {
-  status: InspecaoStatus;
-  observacoes?: string;
+export interface CancelamentoResponse {
+  id: number;
+  status: ApiInspection['status'];
+  canceledAt: string;
+  canceledBy: number;
+  canceledReason: string;
 }
 
 export const inspecaoService = {
@@ -115,15 +123,10 @@ export const inspecaoService = {
     return fromApiInspection(response.data);
   },
 
-  async atualizarStatus(id: number, data: InspecaoStatusUpdate): Promise<InspecaoDTO> {
-    if (data.status !== 'CANCELADA') {
-      throw new Error('A API atual só permite cancelar inspeções por esta ação.');
-    }
-
-    const match = data.observacoes?.match(/\[Cancelamento:\s*([^\]]+)\]/);
-    const response = await apiClient.post<ApiInspection>(`/inspections/${id}/cancel`, {
-      reason: match?.[1] ?? data.observacoes ?? 'Cancelado pelo administrador',
-    });
-    return fromApiInspection(response.data);
+  async cancelar(id: number, reason: string): Promise<CancelamentoResponse> {
+    const motivo = reason.trim();
+    if (motivo.length < 10 || motivo.length > 1000) throw new Error('Informe um motivo entre 10 e 1000 caracteres.');
+    const response = await apiClient.post<CancelamentoResponse>(`/inspections/${id}/cancel`, { reason: motivo });
+    return response.data;
   },
 };
