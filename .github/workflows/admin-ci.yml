@@ -1,0 +1,54 @@
+name: Admin CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Admin-Web/**"
+      - ".github/workflows/admin-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "Admin-Web/**"
+      - ".github/workflows/admin-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint, tests and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Admin-Web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: Admin-Web
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: Admin-Web
+        run: npm run lint
+
+      - name: Run Jest tests
+        working-directory: Admin-Web
+        run: npm test -- --ci --runInBand
+
+      - name: Build Next.js application
+        working-directory: Admin-Web
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
