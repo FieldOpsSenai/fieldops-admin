@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   AlertTriangle,
@@ -24,6 +25,8 @@ import {
   X,
 } from 'lucide-react';
 
+import { getApiErrorMessage } from '@/lib/api/errorMessage';
+import { validateTemplateItems } from '@/lib/templates/validation';
 import { getApiErrorMessage } from '@/lib/api/errorMessage';
 import { validateTemplateItems } from '@/lib/templates/validation';
 import TopHeader from '@/components/layout/TopHeader';
@@ -67,6 +70,9 @@ const RESPONSE_TYPE_LABELS: Record<
   TEXT: 'Texto curto',
   LONG_TEXT: 'Texto longo',
   YES_NO: 'Sim / Não',
+  TEXT: 'Texto curto',
+  LONG_TEXT: 'Texto longo',
+  YES_NO: 'Sim / Não',
   NUMERIC: 'Numérico',
   DATE: 'Data',
   SINGLE_SELECT: 'Seleção única',
@@ -76,6 +82,8 @@ const RESPONSE_TYPE_LABELS: Record<
 
 const PUBLISHABLE_RESPONSE_TYPES: ResponseType[] = [
   'TEXT',
+  'LONG_TEXT',
+  'YES_NO',
   'LONG_TEXT',
   'YES_NO',
   'NUMERIC',
@@ -280,7 +288,12 @@ export default function TemplatesPage() {
   ] = useState<
     InspectionTemplate[]
   >([]);
+  >([]);
 
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [reload, setReload] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const savingRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -300,10 +313,13 @@ export default function TemplatesPage() {
       .catch(() => {
         if (active) { setIsApiListAvailable(false); setTemplates([]); }
       }).finally(() => { if (active) setIsLoading(false); });
+        if (active) { setIsApiListAvailable(false); setTemplates([]); }
+      }).finally(() => { if (active) setIsLoading(false); });
 
     return () => {
       active = false;
     };
+  }, [reload]);
   }, [reload]);
 
   const [
@@ -579,8 +595,19 @@ export default function TemplatesPage() {
       ...section, id: createId('SEC'),
       items: section.items.map((item) => ({ ...item, id: createId('ITEM') })),
     })));
+  const handleDuplicate = (template: InspectionTemplate) => {
+    handleOpenNewEditor();
+    setFormTitle(`${template.title} (Cópia)`);
+    setFormDescription(template.description);
+    setFormCategory(template.category);
+    setFormSections(template.sections.map((section) => ({
+      ...section, id: createId('SEC'),
+      items: section.items.map((item) => ({ ...item, id: createId('ITEM') })),
+    })));
   };
 
+  const handleDelete = () => {
+    showToast('A exclusão de modelos ainda não está disponível. O rascunho foi mantido.');
   const handleDelete = () => {
     showToast('A exclusão de modelos ainda não está disponível. O rascunho foi mantido.');
   };
@@ -602,6 +629,7 @@ export default function TemplatesPage() {
       sectionIndex: number
     ) => {
       if (!window.confirm('Remover esta seção e seus itens ao salvar o rascunho?')) return;
+      if (!window.confirm('Remover esta seção e seus itens ao salvar o rascunho?')) return;
 
       setFormSections(
         (current) =>
@@ -618,6 +646,15 @@ export default function TemplatesPage() {
       );
     };
 
+  const handleMoveSection = (index: number, direction: -1 | 1) => {
+    setFormSections((current) => {
+      const destination = index + direction;
+      if (destination < 0 || destination >= current.length) return current;
+      const reordered = [...current];
+      [reordered[index], reordered[destination]] = [reordered[destination], reordered[index]];
+      return normalizeOrders(reordered);
+    });
+  };
   const handleMoveSection = (index: number, direction: -1 | 1) => {
     setFormSections((current) => {
       const destination = index + direction;
@@ -695,6 +732,11 @@ export default function TemplatesPage() {
         formSections[
           sectionIndex
         ];
+
+      if (/^\d+$/.test(section.items[itemIndex].id)) {
+        setEditorError('A exclusão de itens já salvos ainda não está disponível.');
+        return;
+      }
 
       if (/^\d+$/.test(section.items[itemIndex].id)) {
         setEditorError('A exclusão de itens já salvos ainda não está disponível.');
@@ -1105,10 +1147,13 @@ export default function TemplatesPage() {
               {isApiListAvailable
                 ? 'Rascunhos são salvos e podem ser editados. Use Copiar para preparar um novo rascunho a partir de qualquer modelo. A exclusão de modelos e de itens já salvos ainda não está disponível.'
                 : 'Não foi possível carregar os modelos. Tente novamente para consultar os dados salvos.'}
+                ? 'Rascunhos são salvos e podem ser editados. Use Copiar para preparar um novo rascunho a partir de qualquer modelo. A exclusão de modelos e de itens já salvos ainda não está disponível.'
+                : 'Não foi possível carregar os modelos. Tente novamente para consultar os dados salvos.'}
             </p>
           </div>
         </section>
 
+        <div role="status">{isLoading ? "Carregando modelos…" : !isApiListAvailable ? <button type="button" onClick={() => { setIsLoading(true); setReload((value) => value + 1); }}>Tentar novamente</button> : null}</div><section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div role="status">{isLoading ? "Carregando modelos…" : !isApiListAvailable ? <button type="button" onClick={() => { setIsLoading(true); setReload((value) => value + 1); }}>Tentar novamente</button> : null}</div><section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <MetricCard
             icon={
@@ -1333,6 +1378,7 @@ export default function TemplatesPage() {
                   }
                   onDelete={() =>
                     handleDelete()
+                    handleDelete()
                   }
                 />
               )
@@ -1499,8 +1545,10 @@ export default function TemplatesPage() {
                                   type="button"
                                   onClick={() =>
                                     handleDelete()
+                                    handleDelete()
                                   }
                                   className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                  disabled title="Exclusão de rascunhos indisponível"
                                   disabled title="Exclusão de rascunhos indisponível"
                                 >
                                   <Trash2
@@ -1606,6 +1654,7 @@ export default function TemplatesPage() {
           }
           onClose={() =>
             !isSaving && setIsEditorOpen(
+            !isSaving && setIsEditorOpen(
               false
             )
           }
@@ -1621,6 +1670,7 @@ export default function TemplatesPage() {
           onAddSection={
             handleAddSection
           }
+          onMoveSection={handleMoveSection}
           onMoveSection={handleMoveSection}
           onRemoveSection={
             handleRemoveSection
@@ -1867,6 +1917,7 @@ function TemplateCard({
               }
               className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
               disabled title="Exclusão de rascunhos indisponível"
+              disabled title="Exclusão de rascunhos indisponível"
             >
               <Trash2
                 size={15}
@@ -2056,6 +2107,9 @@ function PreviewModal({
                                       {item.required ? 'Resposta obrigatória' : 'Resposta opcional'}
                                     </span>
                                     <span className="px-2 py-0.5 rounded bg-slate-100 text-[11px] font-semibold text-slate-600">
+                                      {item.required ? 'Resposta obrigatória' : 'Resposta opcional'}
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded bg-slate-100 text-[11px] font-semibold text-slate-600">
                                       {
                                         RESPONSE_TYPE_LABELS[
                                           item
@@ -2067,11 +2121,13 @@ function PreviewModal({
                                     {item.allowObservation && (
                                       <span className="px-2 py-0.5 rounded bg-blue-50 text-[11px] font-semibold text-blue-700">
                                         Observação obrigatória em não conformidade
+                                        Observação obrigatória em não conformidade
                                       </span>
                                     )}
 
                                     {item.requireEvidenceOnNonConformity && (
                                       <span className="px-2 py-0.5 rounded bg-amber-50 text-[11px] font-semibold text-amber-700">
+                                        Evidência obrigatória em não conformidade
                                         Evidência obrigatória em não conformidade
                                       </span>
                                     )}
@@ -2153,6 +2209,10 @@ function ResponsePreview({
   switch (
     item.responseType
   ) {
+    case 'LONG_TEXT':
+      return <div className="w-52 h-20 px-3 py-2 bg-slate-50 border rounded text-xs text-slate-400">Resposta em texto longo…</div>;
+    case 'YES_NO':
+      return <div className="flex gap-2 text-xs"><span className="border rounded px-3 py-2">Sim</span><span className="border rounded px-3 py-2">Não</span></div>;
     case 'LONG_TEXT':
       return <div className="w-52 h-20 px-3 py-2 bg-slate-50 border rounded text-xs text-slate-400">Resposta em texto longo…</div>;
     case 'YES_NO':
@@ -2245,6 +2305,7 @@ type EditorModalProps = {
   onAddSection: () => void;
 
   onMoveSection: (index: number, direction: -1 | 1) => void;
+  onMoveSection: (index: number, direction: -1 | 1) => void;
   onRemoveSection: (
     sectionIndex: number
   ) => void;
@@ -2314,6 +2375,7 @@ function EditorModal({
   onCategoryChange,
   onAddSection,
   onMoveSection,
+  onMoveSection,
   onRemoveSection,
   onSectionTitleChange,
   onAddItem,
@@ -2352,6 +2414,7 @@ function EditorModal({
 
           <button
             type="button" disabled={isSaving}
+            type="button" disabled={isSaving}
             onClick={
               onClose
             }
@@ -2362,7 +2425,9 @@ function EditorModal({
         </header>
 
         <fieldset disabled={isSaving} className="p-5 md:p-6 overflow-y-auto flex-1 space-y-6">
+        <fieldset disabled={isSaving} className="p-5 md:p-6 overflow-y-auto flex-1 space-y-6">
           {editorError && (
+            <div role="alert" className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-sm text-red-700">
             <div role="alert" className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-sm text-red-700">
               <AlertTriangle
                 size={18}
@@ -2406,6 +2471,7 @@ function EditorModal({
                       .value
                   )
                 }
+                aria-label="Título do modelo" maxLength={200} placeholder="Ex: Inspeção Preventiva de Geradores"
                 aria-label="Título do modelo" maxLength={200} placeholder="Ex: Inspeção Preventiva de Geradores"
                 className="w-full py-2 px-3 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#10b981]"
               />
@@ -2505,6 +2571,7 @@ function EditorModal({
 
               <button
                 type="button" disabled={isSaving}
+                type="button" disabled={isSaving}
                 onClick={
                   onAddSection
                 }
@@ -2538,6 +2605,7 @@ function EditorModal({
                     <input
                       type="text"
                       aria-label={`Nome da seção ${sectionIndex + 1}`} maxLength={200}
+                      aria-label={`Nome da seção ${sectionIndex + 1}`} maxLength={200}
                       value={
                         section.title
                       }
@@ -2556,12 +2624,14 @@ function EditorModal({
 
                     <button
                       type="button" disabled={isSaving}
+                      type="button" disabled={isSaving}
                       onClick={() =>
                         onRemoveSection(
                           sectionIndex
                         )
                       }
                       className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                      title={`Remover seção ${sectionIndex + 1}`}
                       title={`Remover seção ${sectionIndex + 1}`}
                     >
                       <Trash2
@@ -2570,6 +2640,10 @@ function EditorModal({
                     </button>
                   </div>
 
+                  <div className="flex gap-2 px-4 pt-3">
+                    <button type="button" disabled={isSaving || sectionIndex === 0} onClick={() => onMoveSection(sectionIndex, -1)} aria-label={`Subir seção ${sectionIndex + 1}`} className="text-xs font-semibold text-teal-700 disabled:text-slate-300">↑ Subir</button>
+                    <button type="button" disabled={isSaving || sectionIndex === formSections.length - 1} onClick={() => onMoveSection(sectionIndex, 1)} aria-label={`Descer seção ${sectionIndex + 1}`} className="text-xs font-semibold text-teal-700 disabled:text-slate-300">↓ Descer</button>
+                  </div>
                   <div className="flex gap-2 px-4 pt-3">
                     <button type="button" disabled={isSaving || sectionIndex === 0} onClick={() => onMoveSection(sectionIndex, -1)} aria-label={`Subir seção ${sectionIndex + 1}`} className="text-xs font-semibold text-teal-700 disabled:text-slate-300">↑ Subir</button>
                     <button type="button" disabled={isSaving || sectionIndex === formSections.length - 1} onClick={() => onMoveSection(sectionIndex, 1)} aria-label={`Descer seção ${sectionIndex + 1}`} className="text-xs font-semibold text-teal-700 disabled:text-slate-300">↓ Descer</button>
@@ -2649,6 +2723,7 @@ function EditorModal({
 
                     <button
                       type="button" disabled={isSaving}
+                      type="button" disabled={isSaving}
                       onClick={() =>
                         onAddItem(
                           sectionIndex
@@ -2665,6 +2740,7 @@ function EditorModal({
             )}
           </section>
         </fieldset>
+        </fieldset>
 
         <footer className="p-4 md:px-6 bg-slate-50 border-t border-slate-200 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3">
           <p className="text-[11px] text-slate-500 max-w-xl">
@@ -2674,6 +2750,7 @@ function EditorModal({
           <div className="flex flex-col sm:flex-row gap-2">
             <button type="button" disabled={isSaving} onClick={onPreview} className="px-4 py-2 border border-teal-300 text-teal-800 rounded-lg text-sm font-semibold">Prévia do checklist</button>
             <button
+              type="button" disabled={isSaving}
               type="button" disabled={isSaving}
               onClick={
                 onClose
@@ -2685,16 +2762,19 @@ function EditorModal({
 
             <button
               type="button" disabled={isSaving}
+              type="button" disabled={isSaving}
               onClick={
                 onSaveDraft
               }
               className="px-4 py-2 bg-white border border-amber-300 text-amber-700 hover:bg-amber-50 rounded-lg text-sm font-bold"
             >
               {isSaving ? 'Salvando…' : 'Salvar rascunho'}
+              {isSaving ? 'Salvando…' : 'Salvar rascunho'}
             </button>
 
             {(!editingTemplate || editingTemplate.status === 'RASCUNHO') && (
               <button
+                type="button" disabled={isSaving}
                 type="button" disabled={isSaving}
                 onClick={
                   onPublish
@@ -2772,6 +2852,8 @@ function ItemEditor({
             type="text"
             aria-label={`Enunciado do item ${sectionIndex + 1}.${itemIndex + 1}`}
             maxLength={500}
+            aria-label={`Enunciado do item ${sectionIndex + 1}.${itemIndex + 1}`}
+            maxLength={500}
             value={
               item.label
             }
@@ -2815,6 +2897,7 @@ function ItemEditor({
           </label>
 
           <select
+            aria-label={`Tipo de resposta do item ${sectionIndex + 1}.${itemIndex + 1}`}
             aria-label={`Tipo de resposta do item ${sectionIndex + 1}.${itemIndex + 1}`}
             value={
               item.responseType
@@ -2905,6 +2988,7 @@ function ItemEditor({
             />
 
             Exigir observação em não conformidade
+            Exigir observação em não conformidade
           </label>
 
           <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
@@ -2936,6 +3020,11 @@ function ItemEditor({
           </label>
         </div>
       </div>
+
+      <p className="text-xs text-slate-500">
+        As regras de observação e evidência são exigidas quando a resposta indica não conformidade.
+        A resposta obrigatória é uma regra independente.
+      </p>
 
       <p className="text-xs text-slate-500">
         As regras de observação e evidência são exigidas quando a resposta indica não conformidade.
