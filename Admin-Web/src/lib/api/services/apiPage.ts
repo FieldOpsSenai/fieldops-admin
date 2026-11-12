@@ -29,3 +29,18 @@ export function mapApiPage<T, U>(page: ApiPage<T>, map: (item: T) => U): ApiPage
   }
   return { ...page, content: page.content.map(map) };
 }
+
+/** Reads paginated lookup options without silently truncating at the first page. */
+export async function collectPages<T>(fetchPage: (page: number) => Promise<ApiPage<T>>): Promise<T[]> {
+  const result: T[] = [];
+  let page = 0;
+  let pages = 1;
+  while (page < pages) {
+    const response = mapApiPage(await fetchPage(page), (item) => item);
+    if (response.number !== page) throw new Error('A API retornou uma página diferente da solicitada.');
+    result.push(...response.content);
+    pages = response.totalPages;
+    page += 1;
+  }
+  return result;
+}

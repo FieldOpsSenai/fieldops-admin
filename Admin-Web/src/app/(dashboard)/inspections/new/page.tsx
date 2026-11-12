@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import axios from 'axios';
 
@@ -19,6 +19,7 @@ import {
 
 import { useRouter } from 'next/navigation';
 
+import { collectPages } from '@/lib/api/services/apiPage';
 import TopHeader from '@/components/layout/TopHeader';
 
 import {
@@ -125,6 +126,9 @@ function getApiErrorMessage(
 }
 
 export default function NewInspectionPage() {
+  const submittingRef = useRef(false);
+  const siteRequest = useRef(0);
+  const equipmentRequest = useRef(0);
   const router =
     useRouter();
 
@@ -270,11 +274,9 @@ export default function NewInspectionPage() {
         ] =
           await Promise.allSettled(
             [
-              clienteService.listar(),
+              collectPages((page) => clienteService.listarPagina({ page, size: 100, status: 'ACTIVE' })),
 
-              usuarioService.listarPorPerfil(
-                'TECNICO'
-              ),
+              usuarioService.listarTecnicosAtivos(),
               modeloInspecaoService.listarPublicados(),
             ]
           );
@@ -302,7 +304,7 @@ export default function NewInspectionPage() {
           setTecnicos(
             tecnicosResult.value.filter(
               (tecnico) =>
-                tecnico.ativo
+                tecnico.ativo && tecnico.perfil === 'TECNICO'
             )
           );
         }
@@ -399,119 +401,52 @@ export default function NewInspectionPage() {
       ]
     );
 
-  const handleClienteChange =
-    async (
-      clienteId: string
-    ) => {
-      setSelectedClienteId(
-        clienteId
-      );
+  const handleClienteChange = async (clienteId: string) => {
+    const request = ++siteRequest.current;
+    equipmentRequest.current += 1;
+    setSelectedClienteId(clienteId);
+    setSelectedLocalId(''); setSelectedEquipamentoId('');
+    setLocais([]); setEquipamentos([]);
+    setIsLoadingEquipamentos(false); setIsLoadingLocais(Boolean(clienteId));
+    setErrorMessage(null);
+    if (!clienteId) return;
+    try {
+      const data = await collectPages((page) => localService.listarPagina({ clientId: Number(clienteId), status: 'ACTIVE', page, size: 100 }));
+      if (request === siteRequest.current) setLocais(data.filter((site) => site.ativo && site.clienteId === Number(clienteId)));
+    } catch {
+      if (request === siteRequest.current) setErrorMessage('Não foi possível carregar os locais deste cliente. Selecione o cliente novamente para tentar de novo.');
+    } finally {
+      if (request === siteRequest.current) setIsLoadingLocais(false);
+    }
+  };
 
-      setSelectedLocalId('');
-      setSelectedEquipamentoId(
-        ''
-      );
-
-      setLocais([]);
-      setEquipamentos([]);
-
-      setErrorMessage(null);
-
-      if (!clienteId) {
-        return;
-      }
-
-      setIsLoadingLocais(
-        true
-      );
-
-      try {
-        const data =
-          await localService.listarPorCliente(
-            Number(clienteId)
-          );
-
-        setLocais(
-          data.filter(
-            (local) =>
-              local.ativo
-          )
-        );
-      } catch (error: unknown) {
-        console.error(
-          'Erro ao carregar locais:',
-          error
-        );
-
-        setErrorMessage(
-          'Não foi possível carregar os locais deste cliente.'
-        );
-      } finally {
-        setIsLoadingLocais(
-          false
-        );
-      }
-    };
-
-  const handleLocalChange =
-    async (
-      localId: string
-    ) => {
-      setSelectedLocalId(
-        localId
-      );
-
-      setSelectedEquipamentoId(
-        ''
-      );
-
-      setEquipamentos([]);
-
-      setErrorMessage(null);
-
-      if (!localId) {
-        return;
-      }
-
-      setIsLoadingEquipamentos(
-        true
-      );
-
-      try {
-        const data =
-          await equipamentoService.listarPorLocal(
-            Number(localId)
-          );
-
-        setEquipamentos(
-          data.filter(
-            (equipamento) =>
-              equipamento.ativo
-          )
-        );
-      } catch (error: unknown) {
-        console.error(
-          'Erro ao carregar equipamentos:',
-          error
-        );
-
-        setErrorMessage(
-          'Não foi possível carregar os equipamentos deste local.'
-        );
-      } finally {
-        setIsLoadingEquipamentos(
-          false
-        );
-      }
-    };
-
+  const handleLocalChange = async (localId: string) => {
+    const request = ++equipmentRequest.current;
+    setSelectedLocalId(localId); setSelectedEquipamentoId(''); setEquipamentos([]);
+    setIsLoadingEquipamentos(Boolean(localId)); setErrorMessage(null);
+    if (!localId) return;
+    try {
+      const data = await collectPages((page) => equipamentoService.listarPagina({ siteId: Number(localId), status: 'ACTIVE', page, size: 100 }));
+      if (request === equipmentRequest.current) setEquipamentos(data.filter((equipment) => equipment.ativo && equipment.localId === Number(localId)));
+    } catch {
+      if (request === equipmentRequest.current) setErrorMessage('Não foi possível carregar os equipamentos deste local. Selecione o local novamente para tentar de novo.');
+    } finally {
+      if (request === equipmentRequest.current) setIsLoadingEquipamentos(false);
+    }
+  };
   const handleSubmit =
     async (
       event: React.FormEvent
     ) => {
       event.preventDefault();
+      if (submittingRef.current || !session || !canPlanInspections(session.profile)) return;
 
       setErrorMessage(null);
+      if (!selectedCliente?.ativo || !selectedLocal?.ativo || selectedLocal.clienteId !== selectedCliente.id ||
+          (selectedEquipamentoId && (!selectedEquipamento?.ativo || selectedEquipamento.localId !== selectedLocal.id))) {
+        setErrorMessage('Selecione cliente, local e equipamento ativos com vínculos compatíveis.');
+        return;
+      }
 
       if (
         !selectedClienteId
@@ -534,17 +469,7 @@ export default function NewInspectionPage() {
       }
 
       if (
-        !selectedEquipamentoId
-      ) {
-        setErrorMessage(
-          'A API atual exige um equipamento para criar a inspeção.'
-        );
-
-        return;
-      }
-
-      if (
-        !selectedTecnicoId
+        !selectedTecnico?.ativo || selectedTecnico.perfil !== 'TECNICO'
       ) {
         setErrorMessage(
           'Selecione o técnico responsável.'
@@ -553,7 +478,7 @@ export default function NewInspectionPage() {
         return;
       }
 
-      if (!selectedTemplateVersionId) {
+      if (!modelosPublicados.some((modelo) => modelo.versaoId === Number(selectedTemplateVersionId))) {
         setErrorMessage('Selecione um modelo de inspeção publicado.');
         return;
       }
@@ -606,6 +531,7 @@ export default function NewInspectionPage() {
         return;
       }
 
+      submittingRef.current = true;
       setIsSubmitting(
         true
       );
@@ -620,7 +546,7 @@ export default function NewInspectionPage() {
         const normalizedObservation =
           observacoes.trim();
 
-        await inspecaoService.criar(
+        const created = await inspecaoService.criar(
           {
             descricao:
               descricao.trim(),
@@ -645,10 +571,7 @@ export default function NewInspectionPage() {
                   ? 'CRITICAL'
                   : 'MEDIUM',
 
-            equipamentoId:
-              Number(
-                selectedEquipamentoId
-              ),
+            equipamentoId: selectedEquipamentoId ? Number(selectedEquipamentoId) : undefined,
 
             usuarioId:
               Number(
@@ -658,7 +581,7 @@ export default function NewInspectionPage() {
         );
 
         router.push(
-          '/inspections?created=true'
+          `/inspections?created=true&inspectionId=${created.id}`
         );
       } catch (error: unknown) {
         console.error(
@@ -677,6 +600,7 @@ export default function NewInspectionPage() {
             : 'Não foi possível comunicar com a API para criar a inspeção.'
         );
       } finally {
+        submittingRef.current = false;
         setIsSubmitting(
           false
         );
@@ -795,9 +719,7 @@ export default function NewInspectionPage() {
 
                 <select
                   required
-                  value={
-                    selectedClienteId
-                  }
+                  aria-label="Cliente" value={selectedClienteId}
                   onChange={(
                     event
                   ) =>
@@ -857,9 +779,7 @@ export default function NewInspectionPage() {
 
                 <select
                   required
-                  value={
-                    selectedLocalId
-                  }
+                  aria-label="Local" value={selectedLocalId}
                   disabled={
                     !selectedClienteId ||
                     isLoadingLocais
@@ -910,7 +830,7 @@ export default function NewInspectionPage() {
               <div>
                 <label className="flex items-center justify-between text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
                   <span>
-                    Equipamento *
+                    Equipamento (opcional)
                   </span>
 
                   {isLoadingEquipamentos && (
@@ -922,10 +842,7 @@ export default function NewInspectionPage() {
                 </label>
 
                 <select
-                  required
-                  value={
-                    selectedEquipamentoId
-                  }
+                  aria-label="Equipamento" value={selectedEquipamentoId}
                   disabled={
                     !selectedLocalId ||
                     isLoadingEquipamentos
@@ -946,7 +863,7 @@ export default function NewInspectionPage() {
                       : equipamentos.length ===
                           0
                         ? 'Nenhum equipamento ativo encontrado'
-                        : 'Selecione o equipamento...'}
+                        : 'Sem equipamento (opcional)'}
                   </option>
 
                   {equipamentos.map(
@@ -1050,7 +967,7 @@ export default function NewInspectionPage() {
                 </label>
                 <select
                   required
-                  value={selectedTemplateVersionId}
+                  aria-label="Versão publicada" value={selectedTemplateVersionId}
                   onChange={(event) => setSelectedTemplateVersionId(event.target.value)}
                   className="w-full py-2.5 px-3 border border-slate-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#10b981]"
                 >
@@ -1073,9 +990,7 @@ export default function NewInspectionPage() {
                 <input
                   type="text"
                   required
-                  value={
-                    descricao
-                  }
+                  aria-label="Título da inspeção" maxLength={300} value={descricao}
                   onChange={(
                     event
                   ) =>
@@ -1102,9 +1017,7 @@ export default function NewInspectionPage() {
                   min={
                     getMinimumScheduledDate()
                   }
-                  value={
-                    dataAgendada
-                  }
+                  aria-label="Prazo da inspeção" value={dataAgendada}
                   onChange={(
                     event
                   ) =>
@@ -1126,9 +1039,7 @@ export default function NewInspectionPage() {
 
                 <select
                   required
-                  value={
-                    selectedTecnicoId
-                  }
+                  aria-label="Técnico" value={selectedTecnicoId}
                   onChange={(
                     event
                   ) =>
@@ -1228,9 +1139,7 @@ export default function NewInspectionPage() {
 
                 <textarea
                   rows={4}
-                  value={
-                    observacoes
-                  }
+                  aria-label="Instruções ao técnico" maxLength={2000} value={observacoes}
                   onChange={(
                     event
                   ) =>

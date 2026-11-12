@@ -23,7 +23,17 @@ export function toSession(user: ApiSessionUser): Session | null {
 
 export function isSameOrigin(request: NextRequest): boolean {
   const origin = request.headers.get('origin');
-  return request.headers.get('sec-fetch-site') !== 'cross-site' && (!origin || origin === request.nextUrl.origin);
+  if (request.headers.get('sec-fetch-site') === 'cross-site') return false;
+  if (!origin || origin === request.nextUrl.origin) return true;
+  // Next.js can normalize 127.0.0.1 to localhost internally. Compare the
+  // browser's Origin with the actual request Host using the request protocol.
+  const host = request.headers.get('host');
+  if (!host) return false;
+  try {
+    const expected = new URL(request.nextUrl.origin);
+    expected.host = host;
+    return expected.host === host && expected.origin === origin;
+  } catch { return false; }
 }
 
 export function sessionResponse(body: unknown, status = 200): NextResponse {

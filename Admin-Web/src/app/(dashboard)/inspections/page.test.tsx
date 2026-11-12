@@ -1,0 +1,46 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import InspectionsPage from './page';
+import { inspecaoService } from '@/lib/api/services';
+
+jest.mock('@/components/layout/TopHeader', () => ({ __esModule: true, default: () => null }));
+jest.mock('@/lib/api/services', () => ({ inspecaoService: { listarPagina: jest.fn(), cancelar: jest.fn(), historico: jest.fn() } }));
+const inspection = { id: 42, title: 'Verificação', clientName: 'Cliente A', siteName: 'Local A', equipmentName: 'Motor', technicianName: 'Ana', priority: 'HIGH', dueDate: '2030-01-01', status: 'ASSIGNED' };
+beforeEach(() => {
+  jest.resetAllMocks();
+  jest.mocked(inspecaoService.listarPagina).mockResolvedValue({ content: [inspection], number: 0, size: 10, totalElements: 22, totalPages: 3 } as never);
+});
+
+it('sends combined filters to the API and resets the page', async () => {
+  render(<InspectionsPage />);
+  await screen.findByText(/#42/);
+  fireEvent.click(screen.getByRole('button', { name: 'Próxima' }));
+  await waitFor(() => expect(inspecaoService.listarPagina).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }), expect.any(AbortSignal)));
+  fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'Cliente A' } });
+  fireEvent.change(screen.getByLabelText('Estado'), { target: { value: 'UNDER_REVIEW' } });
+  fireEvent.change(screen.getByLabelText('Prioridade'), { target: { value: 'HIGH' } });
+  await waitFor(() => expect(inspecaoService.listarPagina).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, clientName: 'Cliente A', status: 'UNDER_REVIEW', priority: 'HIGH' }), expect.any(AbortSignal)));
+});
+
+it('shows a failed request instead of an empty list', async () => {
+  jest.mocked(inspecaoService.listarPagina).mockRejectedValue(new Error('Sem conexão'));
+  render(<InspectionsPage />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Sem conexão');
+  expect(screen.queryByText(/Nenhuma inspeção encontrada/)).not.toBeInTheDocument();
+});
+
+it('confirms a reason and refreshes after successful cancellation', async () => {
+  jest.mocked(inspecaoService.cancelar).mockResolvedValue({ id: 42, status: 'CANCELED' } as never);
+  render(<InspectionsPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Cancelar' }));
+  fireEvent.change(screen.getByLabelText('Motivo do cancelamento'), { target: { value: 'Cliente pediu reagendamento' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar cancelamento' }));
+  await waitFor(() => expect(inspecaoService.cancelar).toHaveBeenCalledWith(42, 'Cliente pediu reagendamento'));
+  await waitFor(() => expect(inspecaoService.listarPagina).toHaveBeenCalledTimes(2));
+});
+
+it('loads the audit history from the API', async () => {
+  jest.mocked(inspecaoService.historico).mockResolvedValue([{ id: 1, actorId: 9, action: 'INSPECTION_CANCELED', detail: 'Solicitado pelo cliente', occurredAt: '2026-11-08T12:00:00Z' }]);
+  render(<InspectionsPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Histórico' }));
+  expect(await screen.findByRole('dialog', { name: 'Histórico da inspeção' })).toHaveTextContent('Solicitado pelo cliente');
+});

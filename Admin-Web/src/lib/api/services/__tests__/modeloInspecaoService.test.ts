@@ -153,3 +153,39 @@ it.each([true, false])('persists and reloads independent evidence rules set to %
   }));
   expect(saved.sections[0].items[0]).toMatchObject({ required: enabled, allowObservation: !enabled, requireEvidenceOnNonConformity: enabled });
 });
+
+it('does not publish when server validation rejects the checklist', async () => {
+  jest.mocked(apiClient.get).mockResolvedValue({ data: { template: detail, validForPublication: false, issues: ['Checklist incompleto'] } });
+  await expect(modeloInspecaoService.publicar('1')).rejects.toThrow('Checklist incompleto');
+  expect(apiClient.post).not.toHaveBeenCalled();
+});
+
+it('uses the confirmed publication version, date and author without another read', async () => {
+  jest.mocked(apiClient.get).mockResolvedValue({ data: { template: detail, validForPublication: true, issues: [] } });
+  jest.mocked(apiClient.post).mockResolvedValue({ data: { id: 8, versionNumber: 3, publishedAt: '2026-11-07T12:00:00Z', publishedBy: 4 } });
+  const published = await modeloInspecaoService.publicar('1');
+  expect(published).toMatchObject({ status: 'PUBLICADO', version: 3, publishedAt: '2026-11-07T12:00:00Z', publishedBy: 'Usuário #4' });
+  expect(apiClient.get).toHaveBeenCalledTimes(1);
+  expect(apiClient.post).toHaveBeenCalledWith('/inspection-templates/1/publish');
+});
+
+it('refuses to republish an already published template', async () => {
+  jest.mocked(apiClient.get).mockResolvedValue({ data: { template: { ...detail, status: 'ACTIVE' }, validForPublication: true, issues: [] } });
+  await expect(modeloInspecaoService.publicar('1')).rejects.toThrow('Somente rascunhos');
+  expect(apiClient.post).not.toHaveBeenCalled();
+});
+
+it('offers every published version, loads following pages and excludes drafts', async () => {
+  jest.mocked(apiClient.get).mockImplementation(async (url, config) => {
+    if (url === '/inspection-templates') return { data: {
+      content: config?.params.page === 0 ? [{ ...detail, status: 'ACTIVE' }] : [{ ...detail, id: 2, status: 'DRAFT' }],
+      number: config?.params.page, totalPages: 2, totalElements: 2, size: 1,
+    } };
+    return { data: [{ id: 8, versionNumber: 2 }, { id: 7, versionNumber: 1, titleSnapshot: 'Título original' }] };
+  });
+  expect(await modeloInspecaoService.listarPublicados()).toEqual([
+    { versaoId: 8, modeloId: 1, titulo: 'Compressor', categoria: 'Mecânica', versao: 2 },
+    { versaoId: 7, modeloId: 1, titulo: 'Título original', categoria: 'Mecânica', versao: 1 },
+  ]);
+  expect(apiClient.get).not.toHaveBeenCalledWith('/inspection-templates/2/versions');
+});
