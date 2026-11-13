@@ -22,65 +22,27 @@ describe('Hierarchy Services (Cliente, Local, Equipamento)', () => {
   });
 
   describe('clienteService', () => {
-    it('deve listar clientes', async () => {
-      const mockClientes = [
-        {
-          id: 1,
-          nome: 'Empresa Alpha',
-          cnpj: '12345678000100',
-          telefone: '11999998888',
-          email: 'alpha@test.com',
-          ativo: true,
-        },
-      ];
-      (apiClient.get as jest.Mock).mockResolvedValueOnce({
-        data: { content: [{ id: 1, name: 'Empresa Alpha', document: '12345678000100', phone: '11999998888', email: 'alpha@test.com', status: 'ACTIVE' }] },
-      });
-
-      const result = await clienteService.listar();
-      expect(apiClient.get).toHaveBeenCalledWith('/clients', { params: { size: 200 } });
-      expect(result).toEqual(mockClientes);
+    const client = { id: 1, nome: 'Empresa', cnpj: '12345678000100', telefone: '11999998888', email: 'empresa@test.com', ativo: true };
+    it('consulta páginas pelo contrato da API main', async () => {
+      (apiClient.get as jest.Mock).mockResolvedValueOnce({ data: { content: [client], number: 0, size: 10, totalPages: 1, totalElements: 1 } });
+      const page = await clienteService.listarPagina({ search: 'Empresa', page: 0, size: 10 });
+      expect(page.content).toEqual([client]);
+      expect(apiClient.get).toHaveBeenCalledWith('/clientes', { params: { page: 0, size: 10, termo: 'Empresa', sort: 'nome,asc' }, signal: undefined });
     });
-
-    it('deve cadastrar um cliente', async () => {
-      const payload = {
-        nome: 'Empresa Beta',
-        cnpj: '98765432000199',
-        telefone: '11988887777',
-        email: 'beta@test.com',
-      };
-      const created = { id: 2, ...payload, ativo: true };
-      (apiClient.post as jest.Mock).mockResolvedValueOnce({
-        data: { id: 2, name: payload.nome, document: payload.cnpj, phone: payload.telefone, email: payload.email, status: 'ACTIVE' },
-      });
-
-      const result = await clienteService.cadastrar(payload);
-      expect(apiClient.post).toHaveBeenCalledWith('/clients', {
-        name: payload.nome, legalName: payload.nome, document: '98.765.432/0001-99', phone: payload.telefone, email: payload.email,
-      });
-      expect(result).toEqual(created);
+    it('cria, edita e inativa pelo contrato da API main', async () => {
+      const { id, ativo, ...payload } = client; void id; void ativo;
+      (apiClient.post as jest.Mock).mockResolvedValueOnce({ data: client });
+      (apiClient.put as jest.Mock).mockResolvedValueOnce({ data: client });
+      await clienteService.cadastrar(payload); await clienteService.atualizar(1, payload); await clienteService.inativar(1);
+      expect(apiClient.post).toHaveBeenCalledWith('/clientes', payload);
+      expect(apiClient.put).toHaveBeenCalledWith('/clientes/1', payload);
+      expect(apiClient.delete).toHaveBeenCalledWith('/clientes/1');
     });
-
-    it('deve atualizar um cliente', async () => {
-      const payload = {
-        nome: 'Empresa Beta Atualizada',
-        cnpj: '98765432000199',
-        telefone: '11988887777',
-        email: 'beta2@test.com',
-      };
-      const updated = { id: 2, ...payload, ativo: true };
-      (apiClient.put as jest.Mock).mockResolvedValueOnce({ data: {
-        id: 2, name: payload.nome, document: payload.cnpj, phone: payload.telefone, email: payload.email, status: 'ACTIVE',
-      } });
-
-      const result = await clienteService.atualizar(2, payload);
-      expect(apiClient.put).toHaveBeenCalledWith('/clients/2', {
-        name: payload.nome, legalName: payload.nome, document: '98.765.432/0001-99', phone: payload.telefone, email: payload.email,
-      });
-      expect(result).toEqual(updated);
+    it('não simula consulta de clientes inativos indisponível na API', async () => {
+      await expect(clienteService.listarPagina({ status: 'INACTIVE' })).rejects.toThrow('não permite');
+      expect(apiClient.get).not.toHaveBeenCalled();
     });
   });
-
   describe('localService', () => {
     it('atualiza o local sem descartar metadados não editados no formulário', async () => {
       const site = { id: 10, name: 'Unidade', clientId: 1, address: 'Rua A', city: 'São Paulo', state: 'SP', status: 'ACTIVE' };
