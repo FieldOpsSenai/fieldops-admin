@@ -59,6 +59,7 @@ interface ApiMainInspection {
 export interface InspectionQuery {
   page: number; size: number; name?: string; status?: ApiInspection['status'];
   technicianName?: string; clientName?: string; priority?: ApiInspection['priority'];
+  sort?: string;
 }
 export interface InspectionAuditEvent {
   id: number; actorId: number; action: string; detail?: string; occurredAt: string;
@@ -95,7 +96,7 @@ export const inspecaoService = {
     const statuses: Partial<Record<ApiInspection['status'], ApiMainInspection['status']>> = { DRAFT: 'PENDENTE', ASSIGNED: 'AGENDADA', IN_PROGRESS: 'EM_ANDAMENTO', APPROVED: 'CONCLUIDA', CANCELED: 'CANCELADA' };
     const priorities = { LOW: 'BAIXA', MEDIUM: 'MEDIA', HIGH: 'ALTA', CRITICAL: 'URGENTE' } as const;
     const response = await apiClient.get<ApiPage<ApiMainInspection>>('/inspecoes', { params: {
-      page: query.page, size: query.size, termo: apiSearchTerm(query.name),
+      page: query.page, size: query.size, termo: apiSearchTerm(query.name), ...(query.sort ? { sort: query.sort } : {}),
       status: query.status ? statuses[query.status] : undefined,
       usuarioId: query.technicianName ? Number(query.technicianName) : undefined,
       clienteId: query.clientName ? Number(query.clientName) : undefined,
