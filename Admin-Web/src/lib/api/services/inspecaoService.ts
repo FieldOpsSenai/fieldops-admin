@@ -1,5 +1,5 @@
 import apiClient from '../axios';
-import { getPageContent, mapApiPage, type ApiPage } from './apiPage';
+import { apiSearchTerm, collectPages, mapApiPage, type ApiPage } from './apiPage';
 
 export type InspecaoStatus = 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA';
 
@@ -47,6 +47,13 @@ export interface ApiInspection {
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   progress?: number;
   overdue?: boolean;
+  instructions?: string;
+}
+
+interface ApiMainInspection {
+  id: number; descricao: string; status: 'AGENDADA' | 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA';
+  dataAgendada: string; dataLimite?: string; clienteNome?: string; localNome?: string; equipamentoNome?: string;
+  usuarioId?: number; usuarioNome?: string; prioridade?: 'BAIXA' | 'MEDIA' | 'ALTA' | 'URGENTE'; instrucoes?: string;
 }
 
 export interface InspectionQuery {
@@ -93,18 +100,25 @@ export interface CancelamentoResponse {
 
 export const inspecaoService = {
   async listarPagina(query: InspectionQuery, signal?: AbortSignal): Promise<ApiPage<ApiInspection>> {
-    const response = await apiClient.get<ApiPage<ApiInspection>>('/inspections', { params: query, signal });
-    return mapApiPage(response.data, (item) => item);
-  },
-
-  async historico(id: number): Promise<InspectionAuditEvent[]> {
-    return (await apiClient.get<InspectionAuditEvent[]>(`/inspections/${id}/history`)).data;
+    const statuses: Partial<Record<ApiInspection['status'], ApiMainInspection['status']>> = { DRAFT: 'PENDENTE', ASSIGNED: 'AGENDADA', IN_PROGRESS: 'EM_ANDAMENTO', APPROVED: 'CONCLUIDA', CANCELED: 'CANCELADA' };
+    const priorities = { LOW: 'BAIXA', MEDIUM: 'MEDIA', HIGH: 'ALTA', CRITICAL: 'URGENTE' } as const;
+    const response = await apiClient.get<ApiPage<ApiMainInspection>>('/inspecoes', { params: {
+      page: query.page, size: query.size, termo: apiSearchTerm(query.name),
+      status: query.status ? statuses[query.status] : undefined,
+      usuarioId: query.technicianName ? Number(query.technicianName) : undefined,
+      clienteId: query.clientName ? Number(query.clientName) : undefined,
+      prioridade: query.priority ? priorities[query.priority] : undefined,
+    }, signal });
+    const statusMap: Record<ApiMainInspection['status'], ApiInspection['status']> = { PENDENTE: 'DRAFT', AGENDADA: 'ASSIGNED', EM_ANDAMENTO: 'IN_PROGRESS', CONCLUIDA: 'APPROVED', CANCELADA: 'CANCELED' };
+    const priorityMap = { BAIXA: 'LOW', MEDIA: 'MEDIUM', ALTA: 'HIGH', URGENTE: 'CRITICAL' } as const;
+    return mapApiPage(response.data, (item) => ({ id: item.id, title: item.descricao, status: statusMap[item.status],
+      scheduledDate: item.dataAgendada, dueDate: item.dataLimite, clientName: item.clienteNome, siteName: item.localNome,
+      equipmentName: item.equipamentoNome, technicianId: item.usuarioId, technicianName: item.usuarioNome,
+      priority: item.prioridade ? priorityMap[item.prioridade] : undefined, instructions: item.instrucoes,
+      overdue: !!item.dataLimite && !['CONCLUIDA', 'CANCELADA'].includes(item.status) && new Date(item.dataLimite).getTime() < Date.now() }));
   },
   async listarTodas(): Promise<InspecaoDTO[]> {
-    const response = await apiClient.get<ApiInspection[] | { content?: ApiInspection[] }>('/inspections', {
-      params: { size: 200 },
-    });
-    return getPageContent(response.data).map(fromApiInspection);
+    return (await collectPages((page) => this.listarPagina({ page, size: 100 }))).map(fromApiInspection);
   },
 
   async listarPorUsuario(usuarioId: number): Promise<InspecaoDTO[]> {

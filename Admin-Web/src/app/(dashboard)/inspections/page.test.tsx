@@ -15,10 +15,10 @@ it('sends combined filters to the API and resets the page', async () => {
   await screen.findByText(/#42/);
   fireEvent.click(screen.getByRole('button', { name: 'Próxima' }));
   await waitFor(() => expect(inspecaoService.listarPagina).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }), expect.any(AbortSignal)));
-  fireEvent.change(screen.getByLabelText('Cliente'), { target: { value: 'Cliente A' } });
-  fireEvent.change(screen.getByLabelText('Estado'), { target: { value: 'UNDER_REVIEW' } });
+  fireEvent.change(screen.getByLabelText('Cliente (ID)'), { target: { value: '1' } });
+  fireEvent.change(screen.getByLabelText('Estado'), { target: { value: 'IN_PROGRESS' } });
   fireEvent.change(screen.getByLabelText('Prioridade'), { target: { value: 'HIGH' } });
-  await waitFor(() => expect(inspecaoService.listarPagina).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, clientName: 'Cliente A', status: 'UNDER_REVIEW', priority: 'HIGH' }), expect.any(AbortSignal)));
+  await waitFor(() => expect(inspecaoService.listarPagina).toHaveBeenLastCalledWith(expect.objectContaining({ page: 0, clientName: '1', status: 'IN_PROGRESS', priority: 'HIGH' }), expect.any(AbortSignal)));
 });
 
 it('shows a failed request instead of an empty list', async () => {
@@ -38,9 +38,3 @@ it('confirms a reason and refreshes after successful cancellation', async () => 
   await waitFor(() => expect(inspecaoService.listarPagina).toHaveBeenCalledTimes(2));
 });
 
-it('loads the audit history from the API', async () => {
-  jest.mocked(inspecaoService.historico).mockResolvedValue([{ id: 1, actorId: 9, action: 'INSPECTION_CANCELED', detail: 'Solicitado pelo cliente', occurredAt: '2026-11-08T12:00:00Z' }]);
-  render(<InspectionsPage />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Histórico' }));
-  expect(await screen.findByRole('dialog', { name: 'Histórico da inspeção' })).toHaveTextContent('Solicitado pelo cliente');
-});
