@@ -6,7 +6,7 @@ As operações de estrutura são individuais. Se o salvamento falhar, parte das 
 
 A API atual não armazena descrição geral do modelo, opções de seleção ou regra de observação obrigatória. Esses controles não são apresentados como persistidos. A regra de evidência é obrigatória para o item, independentemente do resultado.
 
-A API oferece criação de nova versão em rascunho em `/nova-versao`, mas não oferece histórico separado com data e responsável pela publicação. A listagem retorna os modelos disponíveis com seus números de versão.
+O botão de nova versão cria um rascunho pela rota `/nova-versao`, sem alterar o publicado. A API não oferece histórico separado com data e responsável pela publicação. A listagem retorna os modelos disponíveis com seus números de versão.
 
 O endpoint paginado da API retorna erro com busca nula no PostgreSQL; o web envia `%` como curinga para consulta sem filtro até que o backend trate o parâmetro nulo.
 

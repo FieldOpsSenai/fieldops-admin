@@ -120,3 +120,16 @@ it('shows publication history and prevents direct editing of published models', 
   expect(screen.getByRole('region', { name: 'Versões publicadas' })).toHaveTextContent('Usuário #4');
   expect(screen.queryByRole('button', { name: 'Editar rascunho' })).not.toBeInTheDocument();
 });
+
+it('creates the next draft version through the API and keeps the published model', async () => {
+  const published = { ...template, status: 'PUBLICADO', version: 1 };
+  const next = { ...template, id: '2', version: 2, category: 'Categoria existente', status: 'RASCUNHO' };
+  jest.mocked(modeloInspecaoService.listarTodos).mockResolvedValue([published] as never);
+  jest.mocked(modeloInspecaoService.novaVersao).mockResolvedValue(next as never);
+  render(<TemplatesPage />);
+  fireEvent.click(await screen.findByTitle('Criar nova versão'));
+  await waitFor(() => expect(modeloInspecaoService.novaVersao).toHaveBeenCalledWith('1'));
+  expect(await screen.findByText('Editar Rascunho: 2')).toBeInTheDocument();
+  expect(screen.getAllByRole('option', { name: 'Categoria existente' }).some((option) => (option as HTMLOptionElement).selected)).toBe(true);
+  expect(screen.getAllByRole('heading', { name: 'Modelo salvo' })).toHaveLength(2);
+});
