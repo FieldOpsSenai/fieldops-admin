@@ -61,8 +61,26 @@ it('não restaura a sessão sem credencial no cookie', async () => {
 
 it('revoga o refresh token e remove os cookies ao sair', async () => {
   fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
-  const response = await DELETE(new NextRequest('http://localhost/api/session', { method: 'DELETE', headers: { cookie: 'fieldops_refresh=refresh-secret' } }));
-  expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/auth/logout'), expect.objectContaining({ body: JSON.stringify({ refreshToken: 'refresh-secret' }) }));
+  const response = await DELETE(new NextRequest('http://localhost/api/session', { method: 'DELETE', headers: { cookie: 'fieldops_access=access-secret; fieldops_refresh=refresh-secret' } }));
+  expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/auth/logout'), expect.objectContaining({ headers: { Authorization: 'Bearer access-secret' } }));
   expect(response.cookies.get('fieldops_access')?.value).toBe('');
   expect(response.cookies.get('fieldops_refresh')?.value).toBe('');
+});
+
+it('autentica com o contrato da API main e limita o cookie à expiração real do JWT', async () => {
+  const claims = Buffer.from(JSON.stringify({ id: 42, exp: Math.floor(Date.now() / 1000) + 600 })).toString('base64url');
+  const token = `header.${claims}.signature`;
+  fetchMock.mockResolvedValueOnce(Response.json({ token, refreshToken: 'refresh', expiracao: 86400, nome: 'Admin', email: user.email, perfil: 'ADMINISTRADOR' }));
+  const response = await POST(loginRequest());
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ session: { userId: '42', name: 'Admin', email: user.email, profile: 'ADMINISTRADOR' } });
+  expect(response.cookies.get('fieldops_access')?.maxAge).toBeLessThanOrEqual(600);
+  expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/auth/login'), expect.objectContaining({ body: JSON.stringify({ email: user.email, senha: 'password-test' }) }));
+});
+
+it('valida a sessão da API main usando o id do token autenticado', async () => {
+  const claims = Buffer.from(JSON.stringify({ id: 42 })).toString('base64url');
+  fetchMock.mockResolvedValueOnce(Response.json({ nome: 'Admin', email: user.email, perfil: 'ADMINISTRADOR' }));
+  const response = await GET(new NextRequest('http://localhost/api/session', { headers: { cookie: `fieldops_access=header.${claims}.signature` } }));
+  expect(await response.json()).toEqual({ session: { userId: '42', name: 'Admin', email: user.email, profile: 'ADMINISTRADOR' } });
 });
