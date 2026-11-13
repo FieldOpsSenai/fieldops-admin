@@ -61,51 +61,24 @@ describe('Hierarchy Services (Cliente, Local, Equipamento)', () => {
     });
   });
   describe('equipamentoService', () => {
-    it('preserva QR e metadados ao editar o equipamento', async () => {
-      const equipment = { id: 100, name: 'Compressor', siteId: 10, qrCode: 'QR-100', manufacturer: 'Fabricante', assetNumber: 'PAT-1', status: 'ACTIVE' };
-      (apiClient.get as jest.Mock).mockResolvedValueOnce({ data: equipment });
-      (apiClient.put as jest.Mock).mockResolvedValueOnce({ data: { ...equipment, name: 'Compressor novo' } });
-      const result = await equipamentoService.atualizar(100, { nome: 'Compressor novo', numeroSerie: 'S-2', localId: 10 });
-      expect(apiClient.put).toHaveBeenCalledWith('/equipment/100', expect.objectContaining({ name: 'Compressor novo', qrCode: 'QR-100', manufacturer: 'Fabricante', assetNumber: 'PAT-1' }));
-      expect(result.qrCode).toBe('QR-100');
+    const equipment = { id: 100, nome: 'Compressor', numeroSerie: 'S-1', localId: 10, qrCode: 'QR-100', ativo: true };
+    it('consulta equipamentos e QR pelo contrato atual', async () => {
+      (apiClient.get as jest.Mock).mockResolvedValueOnce({ data: { content: [equipment], number: 0, size: 10, totalPages: 1, totalElements: 1 } }).mockResolvedValueOnce({ data: equipment });
+      expect((await equipamentoService.listarPagina({ siteId: 10 })).content).toEqual([equipment]);
+      expect(apiClient.get).toHaveBeenCalledWith('/equipamentos', { params: { page: 0, size: 10, termo: undefined, localId: 10, sort: 'nome,asc' }, signal: undefined });
+      expect(await equipamentoService.buscarPorQr('QR-100')).toEqual(equipment);
+      expect(apiClient.get).toHaveBeenLastCalledWith('/equipamentos/qrcode/QR-100');
     });
-
-    it('inativa equipamento pela mudança de status', async () => {
+    it('cria, edita sem substituir o QR e inativa pela API', async () => {
+      const payload = { nome: 'Compressor', numeroSerie: 'S-1', localId: 10 };
+      (apiClient.post as jest.Mock).mockResolvedValueOnce({ data: equipment });
+      (apiClient.put as jest.Mock).mockResolvedValueOnce({ data: equipment });
+      expect((await equipamentoService.cadastrar(payload)).qrCode).toBe('QR-100');
+      expect((await equipamentoService.atualizar(100, payload)).qrCode).toBe('QR-100');
       await equipamentoService.inativar(100);
-      expect(apiClient.patch).toHaveBeenCalledWith('/equipment/100/status', { status: 'INACTIVE' });
-    });
-    it('deve listar equipamentos por local', async () => {
-      const mockEquipamentos = [
-        { id: 100, nome: 'Torno CNC', numeroSerie: 'TRN-001', localId: 10, ativo: true },
-      ];
-      (apiClient.get as jest.Mock).mockResolvedValueOnce({
-        data: [{ id: 100, name: 'Torno CNC', serialNumber: 'TRN-001', siteId: 10, status: 'ACTIVE' }],
-      });
-
-      const result = await equipamentoService.listarPorLocal(10);
-      expect(apiClient.get).toHaveBeenCalledWith('/equipment', { params: { siteId: 10, size: 200 } });
-      expect(result).toEqual(mockEquipamentos);
-    });
-
-    it('deve cadastrar equipamento vinculado ao local', async () => {
-      const payload = {
-        nome: 'Compressor 50HP',
-        numeroSerie: 'CMP-50',
-        tipo: 'Compressor',
-        localId: 10,
-        qrCode: 'equipment-unique-101',
-      };
-      const created = { id: 101, ...payload, ativo: true };
-      (apiClient.post as jest.Mock).mockResolvedValueOnce({
-        data: { id: 101, name: payload.nome, serialNumber: payload.numeroSerie, model: payload.tipo, siteId: payload.localId, qrCode: payload.qrCode, status: 'ACTIVE' },
-      });
-
-      const result = await equipamentoService.cadastrar(payload);
-      expect(apiClient.post).toHaveBeenCalledWith('/equipment', {
-        siteId: payload.localId, name: payload.nome, assetNumber: payload.numeroSerie, serialNumber: payload.numeroSerie,
-        model: payload.tipo, qrCode: payload.qrCode, status: 'ACTIVE',
-      });
-      expect(result).toEqual(created);
+      expect(apiClient.post).toHaveBeenCalledWith('/equipamentos', payload);
+      expect(apiClient.put).toHaveBeenCalledWith('/equipamentos/100', payload);
+      expect(apiClient.delete).toHaveBeenCalledWith('/equipamentos/100');
     });
   });
 });
