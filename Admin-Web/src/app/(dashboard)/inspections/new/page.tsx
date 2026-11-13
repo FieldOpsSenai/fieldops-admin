@@ -205,6 +205,8 @@ export default function NewInspectionPage() {
     getDefaultScheduledDate
   );
 
+  const [dataLimite, setDataLimite] = useState('');
+
   const [
     prioridade,
     setPrioridade,
@@ -531,6 +533,11 @@ export default function NewInspectionPage() {
         return;
       }
 
+      if (dataLimite && (!Number.isFinite(new Date(dataLimite).getTime()) || new Date(dataLimite).getTime() < selectedDate.getTime())) {
+        setErrorMessage('O prazo deve ser igual ou posterior à data agendada.');
+        return;
+      }
+
       submittingRef.current = true;
       setIsSubmitting(
         true
@@ -553,6 +560,8 @@ export default function NewInspectionPage() {
 
             dataAgendada:
               formattedDate,
+
+            dataLimite: dataLimite ? (dataLimite.length === 16 ? `${dataLimite}:00` : dataLimite) : undefined,
 
             observacoes:
               normalizedObservation || undefined,
@@ -1017,7 +1026,7 @@ export default function NewInspectionPage() {
                   min={
                     getMinimumScheduledDate()
                   }
-                  aria-label="Prazo da inspeção" value={dataAgendada}
+                  aria-label="Data e hora da inspeção" value={dataAgendada}
                   onChange={(
                     event
                   ) =>
@@ -1028,6 +1037,15 @@ export default function NewInspectionPage() {
                   }
                   className="w-full py-2.5 px-3 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#10b981]"
                 />
+              </div>
+
+              <div>
+                <label htmlFor="inspection-deadline" className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
+                  Prazo limite (opcional)
+                </label>
+                <input id="inspection-deadline" type="datetime-local" min={dataAgendada} value={dataLimite}
+                  onChange={(event) => setDataLimite(event.target.value)}
+                  className="w-full py-2.5 px-3 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#10b981]" />
               </div>
 
               {/* TECH */}
