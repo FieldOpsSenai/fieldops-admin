@@ -9,11 +9,11 @@ const request: InspecaoRequest = {
 beforeEach(() => jest.resetAllMocks());
 
 it('schedules using the selected version ID and the ID confirmed by the API', async () => {
-  jest.mocked(apiClient.post).mockResolvedValue({ data: { id: 77, title: request.descricao, status: 'ASSIGNED' } });
+  jest.mocked(apiClient.post).mockResolvedValue({ data: { id: 77, descricao: request.descricao, status: 'AGENDADA' } });
   const result = await inspecaoService.criar(request);
-  expect(apiClient.post).toHaveBeenCalledWith('/inspections', {
-    title: request.descricao, templateVersionId: 89, clientId: 1, siteId: 2, equipmentId: 3, technicianId: 4,
-    priority: 'HIGH', dueDate: '2030-01-02', dueTime: '14:30:00', supervisorInstructions: 'Verificar pressão',
+  expect(apiClient.post).toHaveBeenCalledWith('/inspecoes', {
+    descricao: request.descricao, modeloId: 89, clienteId: 1, localId: 2, equipamentoId: 3, usuarioId: 4,
+    prioridade: 'ALTA', dataAgendada: '2030-01-02T14:30:00', dataLimite: '2030-01-02T14:30:00', instrucoes: 'Verificar pressão',
   });
   expect(result.id).toBe(77);
 });

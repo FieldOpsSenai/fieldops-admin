@@ -24,7 +24,7 @@ export interface InspecaoRequest {
   descricao: string;
   dataAgendada: string; // ISO string e.g. "2026-08-31T14:30:00"
   observacoes?: string;
-  equipamentoId?: number;
+  equipamentoId: number;
   usuarioId: number;
   clienteId?: number;
   localId?: number;
@@ -115,6 +115,7 @@ export const inspecaoService = {
     if (!data.clienteId || !data.localId || !data.templateVersionId) {
       throw new Error('Cliente, local e versão publicada do modelo são obrigatórios para criar uma inspeção.');
     }
+    if (!data.equipamentoId) throw new Error('Selecione um equipamento para a inspeção.');
 
     if (!data.descricao.trim() || data.descricao.trim().length > 300) {
       throw new Error('Informe um título com até 300 caracteres.');
@@ -128,20 +129,20 @@ export const inspecaoService = {
     }
 
     const dateTime = data.dataAgendada.replace(' ', 'T');
-    const [dueDate, dueTime] = dateTime.split('T');
-    const response = await apiClient.post<ApiInspection>('/inspections', {
-      title: data.descricao.trim(),
-      templateVersionId: data.templateVersionId,
-      clientId: data.clienteId,
-      siteId: data.localId,
-      equipmentId: data.equipamentoId,
-      technicianId: data.usuarioId,
-      priority: data.prioridade ?? 'MEDIUM',
-      dueDate,
-      dueTime,
-      supervisorInstructions: data.observacoes?.trim() || undefined,
+    const priorities = { LOW: 'BAIXA', MEDIUM: 'MEDIA', HIGH: 'ALTA', CRITICAL: 'URGENTE' } as const;
+    const response = await apiClient.post<Omit<InspecaoDTO, 'status'> & { status: InspecaoStatus | 'AGENDADA' }>('/inspecoes', {
+      descricao: data.descricao.trim(),
+      modeloId: data.templateVersionId,
+      clienteId: data.clienteId,
+      localId: data.localId,
+      equipamentoId: data.equipamentoId,
+      usuarioId: data.usuarioId,
+      prioridade: priorities[data.prioridade ?? 'MEDIUM'],
+      dataAgendada: dateTime,
+      dataLimite: dateTime,
+      instrucoes: data.observacoes?.trim() || undefined,
     });
-    return fromApiInspection(response.data);
+    return { ...response.data, status: response.data.status === 'AGENDADA' ? 'PENDENTE' : response.data.status };
   },
 
   async cancelar(id: number, reason: string): Promise<CancelamentoResponse> {
