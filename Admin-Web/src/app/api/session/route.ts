@@ -45,16 +45,27 @@ export async function DELETE(request: NextRequest) {
   if (!isSameOrigin(request)) return sessionResponse({ message: 'Origem não permitida.' }, 403);
   const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
   let accessToken = request.cookies.get(ACCESS_COOKIE)?.value;
-  let revoked = true;
+  let revoked = !accessToken && !refreshToken;
   try {
-    if (!accessToken && refreshToken) {
-      const refreshed = await authRequest('refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken }) });
-      if (refreshed.ok) { const data = await refreshed.json(); accessToken = data.token ?? data.accessToken; }
-      else revoked = refreshed.status === 401 || refreshed.status === 403;
-    }
     if (accessToken) {
       const upstream = await authRequest('logout', { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` } });
-      revoked = upstream.ok || upstream.status === 401;
+      revoked = upstream.ok;
+      if (upstream.status !== 401 && !upstream.ok) return clearSessionCookies(sessionResponse({ loggedOut: true, revoked: false }));
+    }
+    if (!revoked && refreshToken) {
+      const refreshed = await authRequest('refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken }) });
+      if (refreshed.status === 401 || refreshed.status === 403) revoked = true;
+      else if (refreshed.ok) {
+        const data: { token?: string; accessToken?: string } = await refreshed.json();
+        accessToken = data.token ?? data.accessToken;
+        if (accessToken) {
+          const logout = await authRequest('logout', { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` } });
+          revoked = logout.ok;
+        }
+      }
+    } else if (!refreshToken && !revoked) {
+      // Não há refresh token local que possa continuar a sessão.
+      revoked = true;
     }
   } catch { revoked = false; }
   return clearSessionCookies(sessionResponse({ loggedOut: true, revoked }));
