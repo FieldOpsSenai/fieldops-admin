@@ -5,20 +5,36 @@ export const ACCESS_COOKIE = 'fieldops_access';
 export const REFRESH_COOKIE = 'fieldops_refresh';
 export const apiBaseUrl = (
   process.env.FIELDOPS_API_INTERNAL_URL ??
-  `${(process.env.FIELDOPS_API_URL || 'http://localhost:8080').replace(/\/+$/, '')}/api/v1`
+  `${(process.env.FIELDOPS_API_URL || 'http://127.0.0.1:8080').replace(/\/+$/, '')}/api/v1`
 ).replace(/\/+$/, '');
 
 export interface ApiSessionUser {
-  id: number;
-  name: string;
+  id?: number;
+  name?: string;
+  nome?: string;
   email: string;
-  role: 'ADMINISTRATOR' | 'SUPERVISOR' | 'TECHNICIAN';
+  role?: 'ADMINISTRATOR' | 'SUPERVISOR' | 'TECHNICIAN';
+  perfil?: 'ADMINISTRADOR' | 'SUPERVISOR' | 'TECNICO';
+  ativo?: boolean;
   status?: 'ACTIVE' | 'INACTIVE' | 'BLOCKED';
 }
 
-export function toSession(user: ApiSessionUser): Session | null {
-  if ((user.status && user.status !== 'ACTIVE') || !['ADMINISTRATOR', 'SUPERVISOR'].includes(user.role)) return null;
-  return { userId: String(user.id), name: user.name, email: user.email, profile: user.role === 'ADMINISTRATOR' ? 'ADMINISTRADOR' : 'SUPERVISOR' };
+export function jwtClaims(token: string): { id?: number; exp?: number } {
+  try { return JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8')); }
+  catch { return {}; }
+}
+
+export function toSession(user: ApiSessionUser, token?: string): Session | null {
+  const profile = user.perfil ?? (user.role === 'ADMINISTRATOR' ? 'ADMINISTRADOR' : user.role);
+  const id = user.id ?? (token ? jwtClaims(token).id : undefined);
+  const name = user.nome ?? user.name;
+  if (user.ativo === false || (user.status && user.status !== 'ACTIVE') || !['ADMINISTRADOR', 'SUPERVISOR'].includes(profile ?? '') || !id || !name || !user.email) return null;
+  return { userId: String(id), name, email: user.email, profile: profile === 'ADMINISTRADOR' ? 'ADMINISTRADOR' : 'SUPERVISOR' };
+}
+
+export function tokenExpiry(token: string, fallback: number): number {
+  const exp = jwtClaims(token).exp;
+  return typeof exp === 'number' ? Math.max(1, Math.min(fallback, exp - Math.floor(Date.now() / 1000))) : fallback;
 }
 
 export function isSameOrigin(request: NextRequest): boolean {

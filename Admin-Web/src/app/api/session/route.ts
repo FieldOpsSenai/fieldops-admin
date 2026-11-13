@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { ACCESS_COOKIE, REFRESH_COOKIE, authRequest, clearSessionCookies, isSameOrigin, sessionResponse, setSessionCookies, toSession, type ApiSessionUser } from '@/lib/auth/serverSession';
+import { ACCESS_COOKIE, REFRESH_COOKIE, authRequest, clearSessionCookies, isSameOrigin, sessionResponse, setSessionCookies, toSession, tokenExpiry, type ApiSessionUser } from '@/lib/auth/serverSession';
 
 export async function POST(request: NextRequest) {
   if (!isSameOrigin(request)) return sessionResponse({ message: 'Origem não permitida.' }, 403);
@@ -9,17 +9,19 @@ export async function POST(request: NextRequest) {
     return sessionResponse({ message: 'Informe e-mail e senha válidos.' }, 400);
   }
   try {
-    const upstream = await authRequest('login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: credentials.email.trim(), password: credentials.password }) });
+    const upstream = await authRequest('login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: credentials.email.trim(), senha: credentials.password }) });
     if (!upstream.ok) return clearSessionCookies(sessionResponse({ message: upstream.status === 401 || upstream.status === 403 ? 'Credenciais inválidas ou usuário sem acesso.' : 'Não foi possível iniciar a sessão.' }, upstream.status));
-    const data: { accessToken: string; refreshToken: string; expiresIn: number; user: ApiSessionUser } = await upstream.json();
-    if (!data.accessToken || !data.refreshToken || !Number.isFinite(data.expiresIn) || !data.user) return sessionResponse({ message: 'Resposta de autenticação inválida.' }, 502);
-    const session = toSession(data.user);
+    const data: { token?: string; accessToken?: string; refreshToken: string; expiracao?: number; expiresIn?: number; user?: ApiSessionUser } & Partial<ApiSessionUser> = await upstream.json();
+    const access = data.token ?? data.accessToken;
+    const lifetime = data.expiracao ?? data.expiresIn;
+    if (!access || !data.refreshToken || !Number.isFinite(lifetime)) return sessionResponse({ message: 'Resposta de autenticação inválida.' }, 502);
+    const session = toSession(data.user ?? data as ApiSessionUser, access);
     if (!session) {
-      await authRequest('logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: data.refreshToken }) });
+      await authRequest('logout', { method: 'POST', headers: { Authorization: `Bearer ${access}` } });
       return clearSessionCookies(sessionResponse({ message: 'Este usuário não tem acesso à interface administrativa.' }, 403));
     }
     const response = sessionResponse({ session });
-    setSessionCookies(response, data.accessToken, data.expiresIn, data.refreshToken);
+    setSessionCookies(response, access, tokenExpiry(access, lifetime!), data.refreshToken);
     return response;
   } catch {
     return sessionResponse({ message: 'Não foi possível conectar à API FieldOps.' }, 502);
@@ -33,7 +35,7 @@ export async function GET(request: NextRequest) {
     const upstream = await authRequest('me', { headers: { Authorization: `Bearer ${token}` } });
     if (!upstream.ok) return sessionResponse({ message: 'Não foi possível validar a sessão.' }, upstream.status);
     const user: ApiSessionUser = await upstream.json();
-    const session = toSession(user);
+    const session = toSession(user, token);
     if (!session) return clearSessionCookies(sessionResponse({ message: 'Acesso não permitido.' }, 403));
     return sessionResponse({ session });
   } catch { return sessionResponse({ message: 'Não foi possível conectar à API FieldOps.' }, 502); }
@@ -42,10 +44,16 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   if (!isSameOrigin(request)) return sessionResponse({ message: 'Origem não permitida.' }, 403);
   const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
+  let accessToken = request.cookies.get(ACCESS_COOKIE)?.value;
   let revoked = true;
   try {
-    if (refreshToken) {
-      const upstream = await authRequest('logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken }) });
+    if (!accessToken && refreshToken) {
+      const refreshed = await authRequest('refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken }) });
+      if (refreshed.ok) { const data = await refreshed.json(); accessToken = data.token ?? data.accessToken; }
+      else revoked = refreshed.status === 401 || refreshed.status === 403;
+    }
+    if (accessToken) {
+      const upstream = await authRequest('logout', { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` } });
       revoked = upstream.ok || upstream.status === 401;
     }
   } catch { revoked = false; }
