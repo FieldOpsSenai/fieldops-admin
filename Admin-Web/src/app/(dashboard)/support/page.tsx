@@ -16,8 +16,7 @@ import {
 
 type ApiStatus = 'checking' | 'online' | 'offline';
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
-const swaggerUrl = new URL('/swagger-ui.html', apiBaseUrl).toString();
+const swaggerUrl = process.env.NEXT_PUBLIC_API_DOCS_URL;
 
 export default function SupportPage() {
   const [apiStatus, setApiStatus] = useState<ApiStatus>('checking');
@@ -31,7 +30,7 @@ export default function SupportPage() {
         if (isMounted) setApiStatus('online');
       } catch (error: unknown) {
         if (!isMounted) return;
-        setApiStatus(axios.isAxiosError(error) && error.response ? 'online' : 'offline');
+        setApiStatus(axios.isAxiosError(error) && error.response && error.response.status < 500 ? 'online' : 'offline');
       }
     };
 
@@ -90,15 +89,19 @@ export default function SupportPage() {
             <p className="text-xs text-slate-500 mb-4 leading-relaxed">
               Consulte os endpoints REST, contratos JSON de inspeções, clientes e equipamentos.
             </p>
-            <a 
-              href={swaggerUrl}
-              target="_blank" 
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0f766e] hover:underline"
-            >
-              Acessar Swagger UI
-              <ExternalLink size={12} />
-            </a>
+            {swaggerUrl ? (
+              <a
+                href={swaggerUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0f766e] hover:underline"
+              >
+                Acessar Swagger UI
+                <ExternalLink size={12} />
+              </a>
+            ) : (
+              <span className="text-xs text-slate-500">Documentação da API não configurada.</span>
+            )}
           </div>
 
           <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-xs hover:shadow-md transition-shadow">
@@ -109,9 +112,7 @@ export default function SupportPage() {
             <p className="text-xs text-slate-500 mb-4 leading-relaxed">
               Instruções para sincronização offline, captura de fotos e coleta de assinaturas digitais em campo.
             </p>
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:underline cursor-pointer">
-              Ver Tutorial de Operação
-            </span>
+            <span className="text-xs text-slate-500">Tutorial ainda não disponível.</span>
           </div>
 
           <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-xs hover:shadow-md transition-shadow">
@@ -123,7 +124,7 @@ export default function SupportPage() {
               Precisa de ajuda imediata ou identificou um problema operacional? Fale com nosso time de suporte.
             </p>
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-600">
-              suporte@fieldops.com.br
+              Canal de suporte não configurado.
             </span>
           </div>
         </div>
