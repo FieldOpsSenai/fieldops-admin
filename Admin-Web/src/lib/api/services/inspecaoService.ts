@@ -157,4 +157,12 @@ export const inspecaoService = {
     const response = await apiClient.patch<InspecaoDTO>(`/inspecoes/${id}/cancelar`, { motivo });
     return response.data;
   },
+  async atualizarPlanejamento(id: number, data: { priority: NonNullable<ApiInspection['priority']>; dueDate: string; instructions: string }): Promise<InspecaoDTO> {
+    const priorities = { LOW: 'BAIXA', MEDIUM: 'MEDIA', HIGH: 'ALTA', CRITICAL: 'URGENTE' } as const;
+    if (data.dueDate && !Number.isFinite(new Date(data.dueDate).getTime())) throw new Error('Informe um prazo válido.');
+    if (data.instructions.length > 2000) throw new Error('As instruções devem ter até 2000 caracteres.');
+    return (await apiClient.patch<InspecaoDTO>(`/inspecoes/${id}/planejamento`, {
+      prioridade: priorities[data.priority], dataLimite: data.dueDate || null, instrucoes: data.instructions.trim() || null,
+    })).data;
+  },
 };
