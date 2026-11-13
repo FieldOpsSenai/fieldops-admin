@@ -1,7 +1,7 @@
 import apiClient from '../../axios';
 import { inspecaoService, type InspecaoRequest } from '../inspecaoService';
 
-jest.mock('../../axios', () => ({ __esModule: true, default: { get: jest.fn(), post: jest.fn() } }));
+jest.mock('../../axios', () => ({ __esModule: true, default: { get: jest.fn(), post: jest.fn(), patch: jest.fn() } }));
 const request: InspecaoRequest = {
   descricao: 'Inspeção de teste', clienteId: 1, localId: 2, equipamentoId: 3, usuarioId: 4,
   templateVersionId: 89, dataAgendada: '2030-01-02T14:30:00', prioridade: 'HIGH', observacoes: 'Verificar pressão',
@@ -33,16 +33,16 @@ it.each([
   expect(apiClient.post).not.toHaveBeenCalled();
 });
 
-it('sends the exact trimmed cancellation reason and retains audit metadata', async () => {
-  const result = { id: 77, status: 'CANCELED', canceledAt: '2026-11-08T12:00:00Z', canceledBy: 4, canceledReason: 'Cliente solicitou cancelamento' };
-  jest.mocked(apiClient.post).mockResolvedValue({ data: result });
+it('sends the trimmed cancellation reason and returns the inspection from the API', async () => {
+  const result = { id: 77, status: 'CANCELADA' };
+  jest.mocked(apiClient.patch).mockResolvedValue({ data: result });
   await expect(inspecaoService.cancelar(77, ' Cliente solicitou cancelamento ')).resolves.toEqual(result);
-  expect(apiClient.post).toHaveBeenCalledWith('/inspections/77/cancel', { reason: result.canceledReason });
+  expect(apiClient.patch).toHaveBeenCalledWith('/inspecoes/77/cancelar', { motivo: 'Cliente solicitou cancelamento' });
 });
 
-it('rejects cancellation without a sufficiently detailed reason', async () => {
-  await expect(inspecaoService.cancelar(77, 'curto')).rejects.toThrow('10 e 1000');
-  expect(apiClient.post).not.toHaveBeenCalled();
+it('rejects cancellation without a reason', async () => {
+  await expect(inspecaoService.cancelar(77, '  ')).rejects.toThrow('motivo');
+  expect(apiClient.patch).not.toHaveBeenCalled();
 });
 
 it('consulta paginação e filtros de inspeção usando o contrato da API main', async () => {
