@@ -5,7 +5,7 @@ export const ACCESS_COOKIE = 'fieldops_access';
 export const REFRESH_COOKIE = 'fieldops_refresh';
 export const apiBaseUrl = (
   process.env.FIELDOPS_API_INTERNAL_URL ??
-  `${(process.env.FIELDOPS_API_URL || 'http://localhost:8080').replace(/\/+$/, '')}/api/v1`
+  `${(process.env.FIELDOPS_API_URL || 'http://127.0.0.1:8080').replace(/\/+$/, '')}/api/v1`
 ).replace(/\/+$/, '');
 
 export interface ApiSessionUser {
