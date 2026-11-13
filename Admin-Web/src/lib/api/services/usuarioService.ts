@@ -1,7 +1,5 @@
 import apiClient from '../axios';
 import type { Profile } from '@/types';
-import { collectPages, getPageContent, type ApiPage } from './apiPage';
-
 export interface UsuarioDTO {
   id: number;
   nome: string;
@@ -19,80 +17,27 @@ export interface UsuarioRequest {
 
 export type UsuarioUpdate = Omit<UsuarioRequest, 'senha'> & { senha?: string };
 
-interface ApiUser {
-  id: number;
-  name: string;
-  email: string;
-  role: 'ADMINISTRATOR' | 'SUPERVISOR' | 'TECHNICIAN';
-  status: 'ACTIVE' | 'INACTIVE' | 'BLOCKED';
-}
-
-function fromApiUser(user: ApiUser): UsuarioDTO {
-  return {
-    id: user.id,
-    nome: user.name,
-    email: user.email,
-    perfil: user.role === 'ADMINISTRATOR'
-      ? 'ADMINISTRADOR'
-      : user.role === 'SUPERVISOR'
-        ? 'SUPERVISOR'
-        : 'TECNICO',
-    ativo: user.status === 'ACTIVE',
-  };
-}
-
-function toApiRole(profile: Profile): ApiUser['role'] {
-  return profile === 'ADMINISTRADOR'
-    ? 'ADMINISTRATOR'
-    : profile === 'SUPERVISOR'
-      ? 'SUPERVISOR'
-      : 'TECHNICIAN';
-}
-
 export const usuarioService = {
   async listarTecnicosAtivos(): Promise<UsuarioDTO[]> {
-    const users = await collectPages(async (page) => (await apiClient.get<ApiPage<ApiUser>>('/users', {
-      params: { role: 'TECHNICIAN', status: 'ACTIVE', page, size: 100 },
-    })).data);
-    return users.filter((user) => user.role === 'TECHNICIAN' && user.status === 'ACTIVE').map(fromApiUser);
+    const response = await apiClient.get<UsuarioDTO[]>('/inspecoes/tecnicos-disponiveis');
+    return response.data.filter((user) => user.perfil === 'TECNICO' && user.ativo);
   },
   async listarTodos(): Promise<UsuarioDTO[]> {
-    const response = await apiClient.get<ApiUser[] | { content?: ApiUser[] }>('/users', {
-      params: { size: 200 },
-    });
-    return getPageContent(response.data).map(fromApiUser);
+    return (await apiClient.get<UsuarioDTO[]>('/usuarios')).data;
   },
-
   async listarPorPerfil(perfil: Profile): Promise<UsuarioDTO[]> {
-    const response = await apiClient.get<ApiUser[] | { content?: ApiUser[] }>('/users', {
-      params: { role: toApiRole(perfil), size: 200 },
-    });
-    return getPageContent(response.data).map(fromApiUser);
+    return (await apiClient.get<UsuarioDTO[]>(`/usuarios/perfil/${encodeURIComponent(perfil)}`)).data;
   },
-
   async cadastrar(data: UsuarioRequest): Promise<UsuarioDTO> {
-    const response = await apiClient.post<ApiUser>('/users', {
-      name: data.nome,
-      email: data.email,
-      password: data.senha,
-      role: toApiRole(data.perfil),
-    });
-    return fromApiUser(response.data);
+    return (await apiClient.post<UsuarioDTO>('/usuarios', data)).data;
   },
-
   async inativar(id: number): Promise<void> {
-    await apiClient.patch<void>(`/users/${id}/status`, {
-      status: 'INACTIVE',
-    });
+    await apiClient.patch(`/usuarios/${id}/inativar`);
   },
-
   async atualizar(id: number, data: UsuarioUpdate): Promise<UsuarioDTO> {
-    const response = await apiClient.put<ApiUser>(`/users/${id}`, {
-      name: data.nome.trim(),
-      email: data.email.trim(),
-      role: toApiRole(data.perfil),
-      ...(data.senha ? { password: data.senha } : {}),
-    });
-    return fromApiUser(response.data);
+    return (await apiClient.put<UsuarioDTO>(`/usuarios/${id}`, {
+      nome: data.nome.trim(), email: data.email.trim(), perfil: data.perfil,
+      ...(data.senha ? { senha: data.senha } : {}),
+    })).data;
   },
 };

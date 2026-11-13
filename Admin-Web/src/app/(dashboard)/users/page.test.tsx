@@ -3,7 +3,8 @@ import UsersPage from './page';
 import { usuarioService } from '@/lib/api/services';
 
 let mockProfile = 'ADMINISTRADOR';
-jest.mock('next/navigation', () => ({ useRouter: () => ({ replace: jest.fn() }) }));
+const mockReplace = jest.fn();
+jest.mock('next/navigation', () => ({ useRouter: () => ({ replace: mockReplace }) }));
 jest.mock('@/components/layout/TopHeader', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/stores/sessionStore', () => ({ useSessionStore: () => ({ session: { profile: mockProfile } }) }));
 jest.mock('@/lib/api/services', () => ({ usuarioService: { listarTodos: jest.fn(), atualizar: jest.fn(), cadastrar: jest.fn(), inativar: jest.fn() } }));
@@ -32,10 +33,11 @@ it('mantém o formulário aberto quando a API rejeita e-mail duplicado', async (
   expect(screen.getByLabelText('E-mail *')).toHaveValue(usuario.email);
 });
 
-it('permite consulta ao supervisor e oculta ações administrativas', async () => {
+it('redireciona supervisor sem consultar endpoint restrito a administradores', async () => {
   mockProfile = 'SUPERVISOR';
   render(<UsersPage />);
-  expect(await screen.findByText(usuario.nome)).toBeInTheDocument();
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/forbidden'));
+  expect(usuarioService.listarTodos).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: 'Novo usuário' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /Editar|Inativar/ })).not.toBeInTheDocument();
 });
