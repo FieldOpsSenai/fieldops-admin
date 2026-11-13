@@ -569,7 +569,16 @@ export default function TemplatesPage() {
     );
   };
 
-  const handleDuplicate = (template: InspectionTemplate) => {
+  const handleDuplicate = async (template: InspectionTemplate) => {
+    if (template.status === 'PUBLICADO') {
+      try {
+        const draft = await modeloInspecaoService.novaVersao(template.id);
+        setTemplates((current) => [draft, ...current]);
+        handleOpenEdit(draft);
+        showToast(`Versão ${draft.version} criada como rascunho.`);
+      } catch (error) { showToast(getApiErrorMessage(error, 'Não foi possível criar uma nova versão.')); }
+      return;
+    }
     handleOpenNewEditor();
     setFormTitle(`${template.title} (Cópia)`);
     setFormDescription(template.description);
@@ -1484,7 +1493,7 @@ export default function TemplatesPage() {
                                   )
                                 }
                                 className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
-                                title="Duplicar como rascunho"
+                                title={isPublished ? 'Criar nova versão' : 'Duplicar como rascunho'}
                               >
                                 <Copy
                                   size={
@@ -1535,7 +1544,7 @@ export default function TemplatesPage() {
               </h3>
 
               <p className="text-xs text-slate-600 leading-5 mt-1">
-                Rascunhos podem ser editados e publicados. A publicação é validada e gera uma versão imutável. Use Copiar para criar outro modelo sem alterar o original. Criar uma nova versão no mesmo modelo ainda não está disponível.
+                Rascunhos podem ser editados e publicados. Uma nova versão parte do modelo publicado e preserva o original; a API cria um novo registro para o rascunho.
               </p>
             </div>
           </div>
@@ -1853,7 +1862,7 @@ function TemplateCard({
               onDuplicate
             }
             className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-200 rounded"
-            title="Duplicar como rascunho"
+            title={isPublished ? 'Criar nova versão' : 'Duplicar como rascunho'}
           >
             <Copy size={15} />
           </button>
@@ -2109,8 +2118,7 @@ function PreviewModal({
                   size={15}
                 />
 
-                Usar como base para
-                novo rascunho
+                Criar nova versão em rascunho
               </button>
             ) : (
               <button
@@ -2430,6 +2438,7 @@ function EditorModal({
                   }
                   className="w-full py-2 px-3 border border-slate-300 rounded-lg bg-white text-sm"
                 >
+                  {!CATEGORIES.includes(formCategory) && formCategory && <option value={formCategory}>{formCategory}</option>}
                   {CATEGORIES.map(
                     (
                       category
