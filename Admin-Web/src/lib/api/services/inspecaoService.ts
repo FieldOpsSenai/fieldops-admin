@@ -90,14 +90,6 @@ function fromApiInspection(inspection: ApiInspection): InspecaoDTO {
   };
 }
 
-export interface CancelamentoResponse {
-  id: number;
-  status: ApiInspection['status'];
-  canceledAt: string;
-  canceledBy: number;
-  canceledReason: string;
-}
-
 export const inspecaoService = {
   async listarPagina(query: InspectionQuery, signal?: AbortSignal): Promise<ApiPage<ApiInspection>> {
     const statuses: Partial<Record<ApiInspection['status'], ApiMainInspection['status']>> = { DRAFT: 'PENDENTE', ASSIGNED: 'AGENDADA', IN_PROGRESS: 'EM_ANDAMENTO', APPROVED: 'CONCLUIDA', CANCELED: 'CANCELADA' };
@@ -159,10 +151,10 @@ export const inspecaoService = {
     return { ...response.data, status: response.data.status === 'AGENDADA' ? 'PENDENTE' : response.data.status };
   },
 
-  async cancelar(id: number, reason: string): Promise<CancelamentoResponse> {
+  async cancelar(id: number, reason: string): Promise<InspecaoDTO> {
     const motivo = reason.trim();
-    if (motivo.length < 10 || motivo.length > 1000) throw new Error('Informe um motivo entre 10 e 1000 caracteres.');
-    const response = await apiClient.post<CancelamentoResponse>(`/inspections/${id}/cancel`, { reason: motivo });
+    if (!motivo || motivo.length > 1000) throw new Error('Informe um motivo com até 1000 caracteres.');
+    const response = await apiClient.patch<InspecaoDTO>(`/inspecoes/${id}/cancelar`, { motivo });
     return response.data;
   },
 };
