@@ -65,7 +65,7 @@ describe('Hierarchy Services (Cliente, Local, Equipamento)', () => {
     it('consulta equipamentos e QR pelo contrato atual', async () => {
       (apiClient.get as jest.Mock).mockResolvedValueOnce({ data: { content: [equipment], number: 0, size: 10, totalPages: 1, totalElements: 1 } }).mockResolvedValueOnce({ data: equipment });
       expect((await equipamentoService.listarPagina({ siteId: 10 })).content).toEqual([equipment]);
-      expect(apiClient.get).toHaveBeenCalledWith('/equipamentos', { params: { page: 0, size: 10, termo: undefined, localId: 10, sort: 'nome,asc' }, signal: undefined });
+      expect(apiClient.get).toHaveBeenCalledWith('/equipamentos', { params: { page: 0, size: 10, termo: '%', localId: 10, sort: 'nome,asc' }, signal: undefined });
       expect(await equipamentoService.buscarPorQr('QR-100')).toEqual(equipment);
       expect(apiClient.get).toHaveBeenLastCalledWith('/equipamentos/qrcode/QR-100');
     });
