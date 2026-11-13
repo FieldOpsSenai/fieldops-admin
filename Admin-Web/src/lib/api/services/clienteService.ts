@@ -1,5 +1,5 @@
 import apiClient from '../axios';
-import { getPageContent, mapApiPage, type ApiPage, type CadastroQuery } from './apiPage';
+import { collectPages, mapApiPage, type ApiPage, type CadastroQuery } from './apiPage';
 
 export interface ClienteDTO {
   id: number;
@@ -17,75 +17,27 @@ export interface ClienteRequest {
   email: string;
 }
 
-function formatDocument(document: string): string {
-  const digits = document.replace(/\D/g, '');
-  if (digits.length !== 14) return document;
-  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
-}
-
-interface ApiClient {
-  id: number;
-  name: string;
-  legalName?: string;
-  document: string;
-  phone?: string;
-  email?: string;
-  status: 'ACTIVE' | 'INACTIVE';
-}
-
-function fromApiClient(client: ApiClient): ClienteDTO {
-  return {
-    id: client.id,
-    nome: client.name,
-    cnpj: client.document,
-    telefone: client.phone ?? '',
-    email: client.email ?? '',
-    ativo: client.status === 'ACTIVE',
-  };
-}
-
 export const clienteService = {
   async listarPagina(query: CadastroQuery, signal?: AbortSignal): Promise<ApiPage<ClienteDTO>> {
-    const response = await apiClient.get<ApiPage<ApiClient>>('/clients', {
-      params: { page: query.page ?? 0, size: query.size ?? 10, search: query.search || undefined, status: query.status, sort: 'name,asc' }, signal,
+    if (query.status === 'INACTIVE') throw new Error('A API não permite consultar clientes inativos.');
+    const response = await apiClient.get<ApiPage<ClienteDTO>>('/clientes', {
+      params: { page: query.page ?? 0, size: query.size ?? 10, termo: query.search || undefined, sort: 'nome,asc' }, signal,
     });
-    return mapApiPage(response.data, fromApiClient);
+    return mapApiPage(response.data, (client) => client);
   },
   async listar(): Promise<ClienteDTO[]> {
-    const response = await apiClient.get<ApiClient[] | { content?: ApiClient[] }>('/clients', {
-      params: { size: 200 },
-    });
-    return getPageContent(response.data).map(fromApiClient);
+    return collectPages((page) => this.listarPagina({ page, size: 100 }));
   },
-
   async buscarPorId(id: number): Promise<ClienteDTO> {
-    const response = await apiClient.get<ApiClient>(`/clients/${id}`);
-    return fromApiClient(response.data);
+    return (await apiClient.get<ClienteDTO>(`/clientes/${id}`)).data;
   },
-
   async cadastrar(data: ClienteRequest): Promise<ClienteDTO> {
-    const response = await apiClient.post<ApiClient>('/clients', {
-      name: data.nome,
-      legalName: data.nome,
-      document: formatDocument(data.cnpj),
-      phone: data.telefone,
-      email: data.email,
-    });
-    return fromApiClient(response.data);
+    return (await apiClient.post<ClienteDTO>('/clientes', data)).data;
   },
-
   async inativar(id: number): Promise<void> {
-    await apiClient.patch(`/clients/${id}/deactivate`);
+    await apiClient.delete(`/clientes/${id}`);
   },
-
   async atualizar(id: number, data: ClienteRequest): Promise<ClienteDTO> {
-    const response = await apiClient.put<ApiClient>(`/clients/${id}`, {
-      name: data.nome,
-      legalName: data.nome,
-      document: formatDocument(data.cnpj),
-      phone: data.telefone,
-      email: data.email,
-    });
-    return fromApiClient(response.data);
+    return (await apiClient.put<ClienteDTO>(`/clientes/${id}`, data)).data;
   },
 };
