@@ -5,7 +5,7 @@ import Link from 'next/link';
 import TopHeader from '@/components/layout/TopHeader';
 import Pagination from '@/components/shared/Pagination';
 import { getApiErrorMessage } from '@/lib/api/errorMessage';
-import { inspecaoService, type ApiInspection, type InspectionQuery } from '@/lib/api/services';
+import { clienteService, inspecaoService, usuarioService, type ApiInspection, type InspectionQuery } from '@/lib/api/services';
 import type { ApiPage } from '@/lib/api/services/apiPage';
 
 const statuses: Record<ApiInspection['status'], string> = {
@@ -34,6 +34,20 @@ export default function InspectionsPage() {
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [clients, setClients] = useState<{ id: number; nome: string }[] | null>(null);
+  const [technicians, setTechnicians] = useState<{ id: number; nome: string }[] | null>(null);
+  const [filterError, setFilterError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void Promise.allSettled([clienteService.listar(), usuarioService.listarTecnicosAtivos()]).then(([clientResult, technicianResult]) => {
+      if (!active) return;
+      if (clientResult.status === 'fulfilled') setClients(clientResult.value);
+      if (technicianResult.status === 'fulfilled') setTechnicians(technicianResult.value);
+      setFilterError(clientResult.status === 'rejected' || technicianResult.status === 'rejected');
+    });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -81,10 +95,11 @@ export default function InspectionsPage() {
     <section aria-label="Filtros de inspeções" className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-5">
       <label className="text-xs font-bold">Pesquisa<input className={input} value={filters.name} onChange={(e) => updateFilter('name', e.target.value)} /></label>
       <label className="text-xs font-bold">Estado<select className={input} value={filters.status} onChange={(e) => updateFilter('status', e.target.value)}><option value="">Todos</option>{Object.entries(statuses).filter(([key]) => !['SUBMITTED', 'UNDER_REVIEW', 'REJECTED'].includes(key)).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-      <label className="text-xs font-bold">Técnico (ID)<input type="number" min="1" className={input} value={filters.technicianName} onChange={(e) => updateFilter('technicianName', e.target.value)} /></label>
-      <label className="text-xs font-bold">Cliente (ID)<input type="number" min="1" className={input} value={filters.clientName} onChange={(e) => updateFilter('clientName', e.target.value)} /></label>
+      <label className="text-xs font-bold">Técnico{technicians ? <select className={input} value={filters.technicianName} onChange={(e) => updateFilter('technicianName', e.target.value)}><option value="">Todos</option>{technicians.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select> : <input type="number" min="1" placeholder="ID do técnico" className={input} value={filters.technicianName} onChange={(e) => updateFilter('technicianName', e.target.value)} />}</label>
+      <label className="text-xs font-bold">Cliente{clients ? <select className={input} value={filters.clientName} onChange={(e) => updateFilter('clientName', e.target.value)}><option value="">Todos</option>{clients.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}</select> : <input type="number" min="1" placeholder="ID do cliente" className={input} value={filters.clientName} onChange={(e) => updateFilter('clientName', e.target.value)} />}</label>
       <label className="text-xs font-bold">Prioridade<select className={input} value={filters.priority} onChange={(e) => updateFilter('priority', e.target.value)}><option value="">Todas</option>{Object.entries(priorities).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
     </section>
+    {filterError && <p className="text-sm text-amber-700">Não foi possível carregar todas as opções de filtro; use o ID nos campos indisponíveis.</p>}
     {actionError && !cancelTarget && !editTarget && <p role="alert" className="rounded bg-red-50 p-3 text-red-700">{actionError}</p>}
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       {loading && <p role="status" className="p-5">Carregando inspeções…</p>}
