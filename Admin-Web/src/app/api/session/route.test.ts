@@ -67,6 +67,22 @@ it('revoga o refresh token e remove os cookies ao sair', async () => {
   expect(response.cookies.get('fieldops_refresh')?.value).toBe('');
 });
 
+it('renova o acesso expirado e revoga a sessão ao sair', async () => {
+  fetchMock.mockResolvedValueOnce(new Response(null, { status: 401 }))
+    .mockResolvedValueOnce(Response.json({ token: 'renewed-access', refreshToken: 'rotated' }))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }));
+  const response = await DELETE(new NextRequest('http://localhost/api/session', { method: 'DELETE', headers: { cookie: 'fieldops_access=expired; fieldops_refresh=refresh-secret' } }));
+  expect(await response.json()).toEqual({ loggedOut: true, revoked: true });
+  expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining('/auth/logout'), expect.objectContaining({ headers: { Authorization: 'Bearer renewed-access' } }));
+  expect(response.cookies.get('fieldops_refresh')?.value).toBe('');
+});
+
+it('não afirma revogação quando a renovação falha temporariamente', async () => {
+  fetchMock.mockResolvedValueOnce(new Response(null, { status: 401 })).mockResolvedValueOnce(new Response(null, { status: 503 }));
+  const response = await DELETE(new NextRequest('http://localhost/api/session', { method: 'DELETE', headers: { cookie: 'fieldops_access=expired; fieldops_refresh=refresh-secret' } }));
+  expect(await response.json()).toEqual({ loggedOut: true, revoked: false });
+});
+
 it('autentica com o contrato da API main e limita o cookie à expiração real do JWT', async () => {
   const claims = Buffer.from(JSON.stringify({ id: 42, exp: Math.floor(Date.now() / 1000) + 600 })).toString('base64url');
   const token = `header.${claims}.signature`;
