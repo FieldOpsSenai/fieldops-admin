@@ -1,5 +1,5 @@
 import apiClient from '../axios';
-import { mapApiPage, type ApiPage, type CadastroQuery } from './apiPage';
+import { apiSearchTerm, mapApiPage, type ApiPage, type CadastroQuery } from './apiPage';
 
 export interface EquipamentoDTO {
   id: number;
@@ -24,7 +24,7 @@ export const equipamentoService = {
   async listarPagina(query: CadastroQuery, signal?: AbortSignal): Promise<ApiPage<EquipamentoDTO>> {
     if (query.status === 'INACTIVE') throw new Error('A API não permite consultar equipamentos inativos.');
     const response = await apiClient.get<ApiPage<EquipamentoDTO>>('/equipamentos', {
-      params: { page: query.page ?? 0, size: query.size ?? 10, termo: query.search || undefined, localId: query.siteId, sort: 'nome,asc' }, signal,
+      params: { page: query.page ?? 0, size: query.size ?? 10, termo: apiSearchTerm(query.search), localId: query.siteId, sort: 'nome,asc' }, signal,
     });
     return mapApiPage(response.data, (equipment) => equipment);
   },

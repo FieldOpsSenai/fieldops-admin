@@ -1,5 +1,5 @@
 import apiClient from '../axios';
-import { mapApiPage, type ApiPage, type CadastroQuery } from './apiPage';
+import { apiSearchTerm, mapApiPage, type ApiPage, type CadastroQuery } from './apiPage';
 
 export interface LocalDTO {
   id: number;
@@ -20,7 +20,7 @@ export const localService = {
   async listarPagina(query: CadastroQuery, signal?: AbortSignal): Promise<ApiPage<LocalDTO>> {
     if (query.status === 'INACTIVE') throw new Error('A API não permite consultar locais inativos.');
     const response = await apiClient.get<ApiPage<LocalDTO>>('/locais', {
-      params: { page: query.page ?? 0, size: query.size ?? 10, termo: query.search || undefined, clienteId: query.clientId, sort: 'nome,asc' }, signal,
+      params: { page: query.page ?? 0, size: query.size ?? 10, termo: apiSearchTerm(query.search), clienteId: query.clientId, sort: 'nome,asc' }, signal,
     });
     return mapApiPage(response.data, (site) => site);
   },

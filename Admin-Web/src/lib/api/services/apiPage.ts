@@ -23,6 +23,12 @@ export interface CadastroQuery {
   siteId?: number;
 }
 
+// A consulta JPQL da API main aplica LOWER a parâmetros nulos no PostgreSQL.
+// O curinga representa todos os nomes não nulos e evita o erro 500 na busca vazia.
+export function apiSearchTerm(value?: string): string {
+  return value?.trim() || '%';
+}
+
 export function mapApiPage<T, U>(page: ApiPage<T>, map: (item: T) => U): ApiPage<U> {
   if (!Array.isArray(page.content) || !Number.isFinite(page.totalElements) || !Number.isFinite(page.totalPages)) {
     throw new Error('A API não retornou os dados de paginação esperados.');
