@@ -23,6 +23,7 @@ export interface InspecaoDTO {
 export interface InspecaoRequest {
   descricao: string;
   dataAgendada: string; // ISO string e.g. "2026-08-31T14:30:00"
+  dataLimite?: string;
   observacoes?: string;
   equipamentoId: number;
   usuarioId: number;
@@ -136,6 +137,12 @@ export const inspecaoService = {
     }
 
     const dateTime = data.dataAgendada.replace(' ', 'T');
+    if (data.dataLimite) {
+      const dueDate = new Date(data.dataLimite);
+      if (!Number.isFinite(dueDate.getTime()) || dueDate.getTime() < deadline.getTime()) {
+        throw new Error('O prazo deve ser igual ou posterior à data agendada.');
+      }
+    }
     const priorities = { LOW: 'BAIXA', MEDIUM: 'MEDIA', HIGH: 'ALTA', CRITICAL: 'URGENTE' } as const;
     const response = await apiClient.post<Omit<InspecaoDTO, 'status'> & { status: InspecaoStatus | 'AGENDADA' }>('/inspecoes', {
       descricao: data.descricao.trim(),
@@ -146,7 +153,7 @@ export const inspecaoService = {
       usuarioId: data.usuarioId,
       prioridade: priorities[data.prioridade ?? 'MEDIUM'],
       dataAgendada: dateTime,
-      dataLimite: dateTime,
+      dataLimite: data.dataLimite?.replace(' ', 'T') || undefined,
       instrucoes: data.observacoes?.trim() || undefined,
     });
     return { ...response.data, status: response.data.status === 'AGENDADA' ? 'PENDENTE' : response.data.status };

@@ -4,7 +4,7 @@ import { inspecaoService, type InspecaoRequest } from '../inspecaoService';
 jest.mock('../../axios', () => ({ __esModule: true, default: { get: jest.fn(), post: jest.fn(), patch: jest.fn() } }));
 const request: InspecaoRequest = {
   descricao: 'Inspeção de teste', clienteId: 1, localId: 2, equipamentoId: 3, usuarioId: 4,
-  templateVersionId: 89, dataAgendada: '2030-01-02T14:30:00', prioridade: 'HIGH', observacoes: 'Verificar pressão',
+  templateVersionId: 89, dataAgendada: '2030-01-02T14:30:00', dataLimite: '2030-01-03T14:30:00', prioridade: 'HIGH', observacoes: 'Verificar pressão',
 };
 beforeEach(() => jest.resetAllMocks());
 
@@ -13,7 +13,7 @@ it('schedules using the selected version ID and the ID confirmed by the API', as
   const result = await inspecaoService.criar(request);
   expect(apiClient.post).toHaveBeenCalledWith('/inspecoes', {
     descricao: request.descricao, modeloId: 89, clienteId: 1, localId: 2, equipamentoId: 3, usuarioId: 4,
-    prioridade: 'ALTA', dataAgendada: '2030-01-02T14:30:00', dataLimite: '2030-01-02T14:30:00', instrucoes: 'Verificar pressão',
+    prioridade: 'ALTA', dataAgendada: '2030-01-02T14:30:00', dataLimite: '2030-01-03T14:30:00', instrucoes: 'Verificar pressão',
   });
   expect(result.id).toBe(77);
 });
@@ -26,6 +26,7 @@ it('does not schedule without a published version', async () => {
 it.each([
   [{ dataAgendada: '2000-01-01T12:00:00' }, 'prazo futuro'],
   [{ dataAgendada: 'inválida' }, 'prazo futuro'],
+  [{ dataLimite: '2030-01-01T12:00:00' }, 'igual ou posterior'],
   [{ descricao: ' ' }, 'título'],
   [{ observacoes: 'a'.repeat(2001) }, 'instruções'],
 ])('rejects invalid scheduling information before contacting the API', async (changes, message) => {

@@ -42,8 +42,10 @@ async function fillForm() {
 it('submits a selected published version and navigates using the confirmed inspection ID', async () => {
   render(<NewInspectionPage />);
   await fillForm();
+  fireEvent.change(screen.getByLabelText('Data e hora da inspeção'), { target: { value: '2099-01-02T10:00' } });
+  fireEvent.change(screen.getByLabelText('Prazo limite (opcional)'), { target: { value: '2099-01-03T12:00' } });
   fireEvent.click(screen.getByRole('button', { name: 'Agendar Inspeção' }));
-  await waitFor(() => expect(inspecaoService.criar).toHaveBeenCalledWith(expect.objectContaining({ templateVersionId: 89, clienteId: 1, localId: 2, equipamentoId: 3, usuarioId: 4 })));
+  await waitFor(() => expect(inspecaoService.criar).toHaveBeenCalledWith(expect.objectContaining({ templateVersionId: 89, clienteId: 1, localId: 2, equipamentoId: 3, usuarioId: 4, dataAgendada: '2099-01-02T10:00:00', dataLimite: '2099-01-03T12:00:00' })));
   expect(mockPush).toHaveBeenCalledWith('/inspections?created=true&inspectionId=77');
 });
 
