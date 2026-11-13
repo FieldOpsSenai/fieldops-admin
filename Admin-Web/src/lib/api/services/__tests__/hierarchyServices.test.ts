@@ -44,49 +44,22 @@ describe('Hierarchy Services (Cliente, Local, Equipamento)', () => {
     });
   });
   describe('localService', () => {
-    it('atualiza o local sem descartar metadados não editados no formulário', async () => {
-      const site = { id: 10, name: 'Unidade', clientId: 1, address: 'Rua A', city: 'São Paulo', state: 'SP', status: 'ACTIVE' };
-      (apiClient.get as jest.Mock).mockResolvedValueOnce({ data: site });
-      (apiClient.put as jest.Mock).mockResolvedValueOnce({ data: { ...site, name: 'Unidade nova' } });
-      await localService.atualizar(10, { nome: 'Unidade nova', endereco: 'Rua A', clienteId: 1 });
-      expect(apiClient.put).toHaveBeenCalledWith('/sites/10', expect.objectContaining({ name: 'Unidade nova', clientId: 1, city: 'São Paulo', state: 'SP' }));
+    const site = { id: 10, nome: 'Galpão', endereco: 'Rua A', clienteId: 1, ativo: true };
+    it('pesquisa locais com vínculo e paginação na API main', async () => {
+      (apiClient.get as jest.Mock).mockResolvedValueOnce({ data: { content: [site], number: 0, size: 10, totalPages: 1, totalElements: 1 } });
+      expect((await localService.listarPagina({ search: 'Galpão', clientId: 1 })).content).toEqual([site]);
+      expect(apiClient.get).toHaveBeenCalledWith('/locais', { params: { page: 0, size: 10, termo: 'Galpão', clienteId: 1, sort: 'nome,asc' }, signal: undefined });
     });
-
-    it('inativa pelo endpoint de status e preserva vínculos históricos', async () => {
-      await localService.inativar(10);
-      expect(apiClient.patch).toHaveBeenCalledWith('/sites/10/status', { status: 'INACTIVE' });
-      expect(apiClient.delete).not.toHaveBeenCalled();
-    });
-    it('deve listar locais por cliente', async () => {
-      const mockLocais = [
-        { id: 10, nome: 'Galpão 1', endereco: 'Rua A', clienteId: 1, ativo: true },
-      ];
-      (apiClient.get as jest.Mock).mockResolvedValueOnce({
-        data: { content: [{ id: 10, name: 'Galpão 1', address: 'Rua A', clientId: 1, status: 'ACTIVE' }] },
-      });
-
-      const result = await localService.listarPorCliente(1);
-      expect(apiClient.get).toHaveBeenCalledWith('/sites', { params: { clientId: 1, size: 200 } });
-      expect(result).toEqual(mockLocais);
-    });
-
-    it('deve cadastrar um local vinculado ao cliente', async () => {
-      const payload = {
-        nome: 'Galpão 2',
-        endereco: 'Rua B, 100',
-        clienteId: 1,
-      };
-      const created = { id: 11, ...payload, ativo: true };
-      (apiClient.post as jest.Mock).mockResolvedValueOnce({
-        data: { id: 11, name: payload.nome, address: payload.endereco, clientId: payload.clienteId, status: 'ACTIVE' },
-      });
-
-      const result = await localService.cadastrar(payload);
-      expect(apiClient.post).toHaveBeenCalledWith('/sites', { clientId: payload.clienteId, name: payload.nome, address: payload.endereco });
-      expect(result).toEqual(created);
+    it('cria, edita e inativa locais pela API main', async () => {
+      const payload = { nome: site.nome, endereco: site.endereco, clienteId: site.clienteId };
+      (apiClient.post as jest.Mock).mockResolvedValueOnce({ data: site });
+      (apiClient.put as jest.Mock).mockResolvedValueOnce({ data: site });
+      await localService.cadastrar(payload); await localService.atualizar(10, payload); await localService.inativar(10);
+      expect(apiClient.post).toHaveBeenCalledWith('/locais', payload);
+      expect(apiClient.put).toHaveBeenCalledWith('/locais/10', payload);
+      expect(apiClient.delete).toHaveBeenCalledWith('/locais/10');
     });
   });
-
   describe('equipamentoService', () => {
     it('preserva QR e metadados ao editar o equipamento', async () => {
       const equipment = { id: 100, name: 'Compressor', siteId: 10, qrCode: 'QR-100', manufacturer: 'Fabricante', assetNumber: 'PAT-1', status: 'ACTIVE' };

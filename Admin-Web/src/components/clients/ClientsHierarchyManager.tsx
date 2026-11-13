@@ -156,7 +156,7 @@ export default function ClientsHierarchyManager({ initialStep = 1 }: { initialSt
       {notice && <div role="status" className="flex justify-between gap-4 rounded-lg border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900">{notice}<button aria-label="Fechar mensagem" onClick={() => setNotice('')}><X size={16} /></button></div>}
       <section className="flex flex-wrap gap-3 rounded-xl border border-slate-200 bg-white p-4">
         <label className="min-w-48 flex-1 text-xs font-semibold text-slate-600">Pesquisar<input aria-label="Pesquisar cadastros" placeholder={step === 1 ? 'Nome, documento ou e-mail' : 'Nome'} value={query.search ?? ''} onChange={(e) => updateQuery({ search: e.target.value })} className={inputClass} /></label>
-        <label className="text-xs font-semibold text-slate-600">Status<select aria-label="Filtrar status" value={query.status ?? ''} onChange={(e) => updateQuery({ status: (e.target.value || undefined) as CadastroQuery['status'] })} className={inputClass}><option value="">Ativos</option><option value="ACTIVE">Ativos</option>{step !== 1 && <option value="INACTIVE">Inativos</option>}</select></label>
+        <label className="text-xs font-semibold text-slate-600">Status<select aria-label="Filtrar status" value={query.status ?? ''} onChange={(e) => updateQuery({ status: (e.target.value || undefined) as CadastroQuery['status'] })} className={inputClass}><option value="">Ativos</option><option value="ACTIVE">Ativos</option>{step === 3 && <option value="INACTIVE">Inativos</option>}</select></label>
       </section>
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)]">
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
