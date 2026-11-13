@@ -44,3 +44,10 @@ it('rejects cancellation without a sufficiently detailed reason', async () => {
   await expect(inspecaoService.cancelar(77, 'curto')).rejects.toThrow('10 e 1000');
   expect(apiClient.post).not.toHaveBeenCalled();
 });
+
+it('consulta paginação e filtros de inspeção usando o contrato da API main', async () => {
+  jest.mocked(apiClient.get).mockResolvedValue({ data: { content: [{ id: 7, descricao: 'Inspeção', status: 'AGENDADA', dataAgendada: '2030-01-01T12:00:00', clienteNome: 'Cliente', usuarioNome: 'Técnico', prioridade: 'URGENTE' }], number: 0, size: 10, totalPages: 1, totalElements: 1 } });
+  const result = await inspecaoService.listarPagina({ page: 0, size: 10, status: 'ASSIGNED', clientName: '2', technicianName: '3', priority: 'CRITICAL' });
+  expect(apiClient.get).toHaveBeenCalledWith('/inspecoes', { params: { page: 0, size: 10, termo: '%', status: 'AGENDADA', usuarioId: 3, clienteId: 2, prioridade: 'URGENTE' }, signal: undefined });
+  expect(result.content[0]).toMatchObject({ id: 7, title: 'Inspeção', status: 'ASSIGNED', clientName: 'Cliente', priority: 'CRITICAL' });
+});
