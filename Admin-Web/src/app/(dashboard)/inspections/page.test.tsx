@@ -3,7 +3,7 @@ import InspectionsPage from './page';
 import { inspecaoService } from '@/lib/api/services';
 
 jest.mock('@/components/layout/TopHeader', () => ({ __esModule: true, default: () => null }));
-jest.mock('@/lib/api/services', () => ({ inspecaoService: { listarPagina: jest.fn(), cancelar: jest.fn(), historico: jest.fn() } }));
+jest.mock('@/lib/api/services', () => ({ inspecaoService: { listarPagina: jest.fn(), cancelar: jest.fn(), atualizarPlanejamento: jest.fn() } }));
 const inspection = { id: 42, title: 'Verificação', clientName: 'Cliente A', siteName: 'Local A', equipmentName: 'Motor', technicianName: 'Ana', priority: 'HIGH', dueDate: '2030-01-01', status: 'ASSIGNED' };
 beforeEach(() => {
   jest.resetAllMocks();
@@ -36,5 +36,15 @@ it('confirms a reason and refreshes after successful cancellation', async () => 
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar cancelamento' }));
   await waitFor(() => expect(inspecaoService.cancelar).toHaveBeenCalledWith(42, 'Cliente pediu reagendamento'));
   await waitFor(() => expect(inspecaoService.listarPagina).toHaveBeenCalledTimes(2));
+});
+
+it('edits priority, deadline and instructions through the API', async () => {
+  jest.mocked(inspecaoService.atualizarPlanejamento).mockResolvedValue({ id: 42 } as never);
+  render(<InspectionsPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Editar planejamento' }));
+  fireEvent.change(screen.getByLabelText('Prazo limite'), { target: { value: '2031-02-01T15:30' } });
+  fireEvent.change(screen.getByLabelText('Instruções'), { target: { value: 'Usar EPIs' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Salvar planejamento' }));
+  await waitFor(() => expect(inspecaoService.atualizarPlanejamento).toHaveBeenCalledWith(42, { priority: 'HIGH', dueDate: '2031-02-01T15:30', instructions: 'Usar EPIs' }));
 });
 

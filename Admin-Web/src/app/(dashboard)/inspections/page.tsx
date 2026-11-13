@@ -27,6 +27,10 @@ export default function InspectionsPage() {
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
   const [cancelTarget, setCancelTarget] = useState<ApiInspection | null>(null);
+  const [editTarget, setEditTarget] = useState<ApiInspection | null>(null);
+  const [editPriority, setEditPriority] = useState<NonNullable<ApiInspection['priority']>>('MEDIUM');
+  const [editDeadline, setEditDeadline] = useState('');
+  const [editInstructions, setEditInstructions] = useState('');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState('');
@@ -58,6 +62,19 @@ export default function InspectionsPage() {
     } catch (failure) { setActionError(getApiErrorMessage(failure, 'Não foi possível cancelar a inspeção.')); }
     finally { setSaving(false); }
   }
+  async function savePlanning(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editTarget || saving) return;
+    if (editDeadline && editTarget.scheduledDate && new Date(editDeadline).getTime() < new Date(editTarget.scheduledDate).getTime()) {
+      setActionError('O prazo não pode ser anterior à data agendada.'); return;
+    }
+    setSaving(true); setActionError('');
+    try {
+      await inspecaoService.atualizarPlanejamento(editTarget.id, { priority: editPriority, dueDate: editDeadline, instructions: editInstructions });
+      setEditTarget(null); setReload((value) => value + 1);
+    } catch (failure) { setActionError(getApiErrorMessage(failure, 'Não foi possível salvar o planejamento.')); }
+    finally { setSaving(false); }
+  }
   const input = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm';
   return <><TopHeader title="Inspeções" /><main className="mx-auto max-w-7xl space-y-6 p-8">
     <header className="flex flex-wrap items-center justify-between gap-4"><div><h1 className="text-3xl font-bold text-slate-900">Inspeções</h1><p className="text-sm text-slate-500">Acompanhe as atividades planejadas e seu andamento.</p></div><Link href="/inspections/new" className="rounded-lg bg-teal-700 px-4 py-2 font-semibold text-white">Nova inspeção</Link></header>
@@ -68,14 +85,15 @@ export default function InspectionsPage() {
       <label className="text-xs font-bold">Cliente (ID)<input type="number" min="1" className={input} value={filters.clientName} onChange={(e) => updateFilter('clientName', e.target.value)} /></label>
       <label className="text-xs font-bold">Prioridade<select className={input} value={filters.priority} onChange={(e) => updateFilter('priority', e.target.value)}><option value="">Todas</option>{Object.entries(priorities).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
     </section>
-    {actionError && !cancelTarget && <p role="alert" className="rounded bg-red-50 p-3 text-red-700">{actionError}</p>}
+    {actionError && !cancelTarget && !editTarget && <p role="alert" className="rounded bg-red-50 p-3 text-red-700">{actionError}</p>}
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
       {loading && <p role="status" className="p-5">Carregando inspeções…</p>}
       {error && <div role="alert" className="p-5 text-red-700">{error} <button className="underline" onClick={() => setReload((value) => value + 1)}>Tentar novamente</button></div>}
       {!loading && !error && result?.content.length === 0 && <p className="p-5 text-slate-500">Nenhuma inspeção encontrada para os filtros informados.</p>}
-      {!loading && !error && !!result?.content.length && <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-slate-600"><tr>{['Inspeção', 'Cliente / local', 'Equipamento', 'Técnico', 'Prioridade / prazo', 'Estado', 'Ações'].map((heading) => <th className="p-3" key={heading}>{heading}</th>)}</tr></thead><tbody>{result.content.map((item) => <tr className="border-t" key={item.id}><td className="p-3 font-semibold">#{item.id} · {item.title}</td><td className="p-3">{item.clientName ?? '—'}<br />{item.siteName ?? '—'}</td><td className="p-3">{item.equipmentName ?? '—'}</td><td className="p-3">{item.technicianName ?? '—'}</td><td className="p-3">{item.priority ? priorities[item.priority] : '—'}<br />{item.dueDate ?? '—'}{item.overdue ? ' · Atrasada' : ''}</td><td className="p-3">{statuses[item.status] ?? item.status}</td><td className="p-3">{['DRAFT', 'ASSIGNED'].includes(item.status) && <button type="button" className="text-red-700 underline" onClick={() => { setCancelTarget(item); setReason(''); setActionError(''); }}>Cancelar</button>}</td></tr>)}</tbody></table></div>}
+      {!loading && !error && !!result?.content.length && <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-slate-600"><tr>{['Inspeção', 'Cliente / local', 'Equipamento', 'Técnico', 'Prioridade / prazo', 'Estado', 'Ações'].map((heading) => <th className="p-3" key={heading}>{heading}</th>)}</tr></thead><tbody>{result.content.map((item) => <tr className="border-t" key={item.id}><td className="p-3 font-semibold">#{item.id} · {item.title}</td><td className="p-3">{item.clientName ?? '—'}<br />{item.siteName ?? '—'}</td><td className="p-3">{item.equipmentName ?? '—'}</td><td className="p-3">{item.technicianName ?? '—'}</td><td className="p-3">{item.priority ? priorities[item.priority] : '—'}<br />{item.dueDate ?? '—'}{item.overdue ? ' · Atrasada' : ''}</td><td className="p-3">{statuses[item.status] ?? item.status}{item.instructions && <details><summary className="cursor-pointer text-teal-700">Instruções</summary><p>{item.instructions}</p></details>}</td><td className="p-3">{['DRAFT', 'ASSIGNED'].includes(item.status) && <button type="button" className="mr-3 text-teal-700 underline" onClick={() => { setEditTarget(item); setEditPriority(item.priority ?? 'MEDIUM'); setEditDeadline(item.dueDate?.slice(0, 16) ?? ''); setEditInstructions(item.instructions ?? ''); setActionError(''); }}>Editar planejamento</button>}{['DRAFT', 'ASSIGNED'].includes(item.status) && <button type="button" className="text-red-700 underline" onClick={() => { setCancelTarget(item); setReason(''); setActionError(''); }}>Cancelar</button>}</td></tr>)}</tbody></table></div>}
       {result && !error && <Pagination page={page} size={size} total={result.totalElements} pages={result.totalPages} loading={loading} onPage={setPage} onSize={(value) => { setPage(0); setSize(value); }} />}
     </section>
+    {editTarget && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"><form onSubmit={savePlanning} className="w-full max-w-lg space-y-4 rounded-xl bg-white p-6"><h2 className="text-xl font-bold">Editar planejamento #{editTarget.id}</h2>{actionError && <p role="alert" className="text-red-700">{actionError}</p>}<label className="block text-sm font-semibold">Prioridade<select className={input} value={editPriority} onChange={(e) => setEditPriority(e.target.value as NonNullable<ApiInspection['priority']>)}>{Object.entries(priorities).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label><label className="block text-sm font-semibold">Prazo limite<input className={input} type="datetime-local" value={editDeadline} onChange={(e) => setEditDeadline(e.target.value)} /></label><label className="block text-sm font-semibold">Instruções<textarea className={input} value={editInstructions} maxLength={2000} onChange={(e) => setEditInstructions(e.target.value)} rows={4} /></label><div className="flex justify-end gap-3"><button type="button" disabled={saving} onClick={() => setEditTarget(null)}>Voltar</button><button type="submit" disabled={saving} className="rounded bg-teal-700 px-4 py-2 text-white">{saving ? 'Salvando…' : 'Salvar planejamento'}</button></div></form></div>}
     {cancelTarget && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"><form onSubmit={cancelInspection} className="w-full max-w-lg space-y-4 rounded-xl bg-white p-6"><h2 className="text-xl font-bold">Cancelar inspeção #{cancelTarget.id}</h2><p className="text-sm text-slate-600">Confirme o cancelamento e informe a justificativa. A API não disponibiliza consulta do histórico de cancelamentos.</p>{actionError && <p role="alert" className="text-red-700">{actionError}</p>}<label className="block text-sm font-semibold">Motivo do cancelamento<textarea className={input} value={reason} onChange={(e) => setReason(e.target.value)} minLength={1} maxLength={1000} required rows={4} /></label><div className="flex justify-end gap-3"><button type="button" disabled={saving} onClick={() => setCancelTarget(null)}>Voltar</button><button type="submit" disabled={saving} className="rounded-lg bg-red-700 px-4 py-2 text-white">{saving ? 'Cancelando…' : 'Confirmar cancelamento'}</button></div></form></div>}
   </main></>;
 }

@@ -51,3 +51,9 @@ it('consulta paginação e filtros de inspeção usando o contrato da API main',
   expect(apiClient.get).toHaveBeenCalledWith('/inspecoes', { params: { page: 0, size: 10, termo: '%', status: 'AGENDADA', usuarioId: 3, clienteId: 2, prioridade: 'URGENTE' }, signal: undefined });
   expect(result.content[0]).toMatchObject({ id: 7, title: 'Inspeção', status: 'ASSIGNED', clientName: 'Cliente', priority: 'CRITICAL' });
 });
+
+it('atualiza planejamento nos campos e rota esperados pela API main', async () => {
+  jest.mocked(apiClient.patch).mockResolvedValue({ data: { id: 77 } });
+  await inspecaoService.atualizarPlanejamento(77, { priority: 'CRITICAL', dueDate: '2031-02-01T15:30', instructions: ' Usar EPIs ' });
+  expect(apiClient.patch).toHaveBeenCalledWith('/inspecoes/77/planejamento', { prioridade: 'URGENTE', dataLimite: '2031-02-01T15:30', instrucoes: 'Usar EPIs' });
+});
