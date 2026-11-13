@@ -443,7 +443,7 @@ export default function NewInspectionPage() {
 
       setErrorMessage(null);
       if (!selectedCliente?.ativo || !selectedLocal?.ativo || selectedLocal.clienteId !== selectedCliente.id ||
-          (selectedEquipamentoId && (!selectedEquipamento?.ativo || selectedEquipamento.localId !== selectedLocal.id))) {
+          !selectedEquipamento?.ativo || selectedEquipamento.localId !== selectedLocal.id) {
         setErrorMessage('Selecione cliente, local e equipamento ativos com vínculos compatíveis.');
         return;
       }
@@ -571,7 +571,7 @@ export default function NewInspectionPage() {
                   ? 'CRITICAL'
                   : 'MEDIUM',
 
-            equipamentoId: selectedEquipamentoId ? Number(selectedEquipamentoId) : undefined,
+            equipamentoId: Number(selectedEquipamentoId),
 
             usuarioId:
               Number(
@@ -830,7 +830,7 @@ export default function NewInspectionPage() {
               <div>
                 <label className="flex items-center justify-between text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
                   <span>
-                    Equipamento (opcional)
+                    Equipamento *
                   </span>
 
                   {isLoadingEquipamentos && (
@@ -842,7 +842,7 @@ export default function NewInspectionPage() {
                 </label>
 
                 <select
-                  aria-label="Equipamento" value={selectedEquipamentoId}
+                  required aria-label="Equipamento" value={selectedEquipamentoId}
                   disabled={
                     !selectedLocalId ||
                     isLoadingEquipamentos
@@ -863,7 +863,7 @@ export default function NewInspectionPage() {
                       : equipamentos.length ===
                           0
                         ? 'Nenhum equipamento ativo encontrado'
-                        : 'Sem equipamento (opcional)'}
+                        : 'Selecione o equipamento...'}
                   </option>
 
                   {equipamentos.map(
