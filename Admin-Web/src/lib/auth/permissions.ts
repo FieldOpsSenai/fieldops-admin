@@ -67,7 +67,7 @@ export function canAccessAdminWeb(
 export function canManageUsers(
   profile?: string | null
 ): boolean {
-  return isAdministrativeRole(profile);
+  return normalizeRole(profile) === 'ADMIN';
 }
 
 export function canEditUsers(profile?: string | null): boolean {
