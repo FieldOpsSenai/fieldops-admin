@@ -23,7 +23,6 @@ interface ApiTemplateItem {
   id: number;
   title: string;
   description?: string;
-  description?: string;
   responseType: string;
   required: boolean;
   observationRequiredOnFailure: boolean;
@@ -35,7 +34,6 @@ interface ApiTemplateItem {
 interface ApiTemplateSection {
   id: number;
   title: string;
-  description?: string;
   description?: string;
   displayOrder: number;
   items: ApiTemplateItem[];
@@ -53,19 +51,14 @@ interface ApiTemplateDetail extends TemplateSummary {
 function mapResponseType(value: string): ResponseType {
   if (value === 'TEXT_LONG') return 'LONG_TEXT';
   if (value === 'BOOLEAN') return 'YES_NO';
-  if (value === 'TEXT_LONG') return 'LONG_TEXT';
-  if (value === 'BOOLEAN') return 'YES_NO';
   if (value === 'NUMBER') return 'NUMERIC';
   if (value === 'SINGLE_CHOICE') return 'SINGLE_SELECT';
-  if (value === 'CONFORMITY') return 'BOOLEAN';
   if (value === 'CONFORMITY') return 'BOOLEAN';
   if (value === 'DATE') return 'DATE';
   return 'TEXT';
 }
 
 function toApiResponseType(value: ResponseType): string {
-  if (value === 'LONG_TEXT') return 'TEXT_LONG';
-  if (value === 'YES_NO') return 'BOOLEAN';
   if (value === 'LONG_TEXT') return 'TEXT_LONG';
   if (value === 'YES_NO') return 'BOOLEAN';
   if (value === 'NUMERIC') return 'NUMBER';
@@ -106,26 +99,11 @@ function mapTemplate(template: ApiTemplateDetail, version?: TemplateVersion, ver
       title: section.title,
       order: section.displayOrder,
       items: [...section.items].sort((a, b) => a.displayOrder - b.displayOrder).map(mapTemplateItem),
-      items: [...section.items].sort((a, b) => a.displayOrder - b.displayOrder).map(mapTemplateItem),
     })),
   };
 }
 
 export const modeloInspecaoService = {
-  async criarRascunho(data: { title: string; description: string; category: string }) {
-    const response = await apiClient.post<ApiTemplateDetail>('/inspection-templates', data);
-    return mapTemplate(response.data);
-  },
-
-  async buscarPorId(id: string) {
-    const response = await apiClient.get<ApiTemplateDetail>(`/inspection-templates/${id}`);
-    return mapTemplate(response.data);
-  },
-
-  // Successful creates replace temporary IDs in this working copy. Keep it on a
-  // failed save so retrying does not duplicate confirmed sections or items.
-  async salvarRascunho(
-    id: string,
   async criarRascunho(data: { title: string; description: string; category: string }) {
     const response = await apiClient.post<ApiTemplateDetail>('/inspection-templates', data);
     return mapTemplate(response.data);
@@ -168,47 +146,16 @@ export const modeloInspecaoService = {
       } else {
         const created = await apiClient.post<ApiTemplateSection>(`${base}/sections`, payload);
         section.id = String(created.data.id);
-  ) {
-    const base = `/inspection-templates/${id}`;
-    const current = (await apiClient.get<ApiTemplateDetail>(base)).data;
-    if (current.status !== 'DRAFT') throw new Error('Versões publicadas são imutáveis.');
-    const errors = validateTemplateItems(data.sections);
-    if (errors.length) throw new Error(errors.join(' '));
-    for (const section of data.sections) {
-      if (!section.title.trim() || section.title.trim().length > 200) {
-        throw new Error('Cada seção deve ter um nome com até 200 caracteres.');
-      }
-      const previous = current.sections.find((entry) => String(entry.id) === section.id);
-      if (previous?.items.some((item) => !section.items.some((entry) => entry.id === String(item.id)))) {
-        throw new Error('A exclusão de itens já salvos ainda não está disponível. Você pode remover a seção inteira.');
-      }
-      for (const item of section.items) {
-        if (item.responseType === 'MULTI_SELECT') throw new Error('Seleção múltipla ainda não está disponível.');
-      }
-    }
-    await apiClient.put(base, { title: data.title, description: data.description, category: data.category });
-    for (const [index, section] of data.sections.entries()) {
-      const previous = current.sections.find((entry) => String(entry.id) === section.id);
-      const payload = { title: section.title, description: previous?.description, displayOrder: index + 1 };
-      if (previous) {
-        await apiClient.put(`${base}/sections/${section.id}`, payload);
-      } else {
-        const created = await apiClient.post<ApiTemplateSection>(`${base}/sections`, payload);
-        section.id = String(created.data.id);
       }
       for (const [itemIndex, item] of section.items.entries()) {
         const oldItem = previous?.items.find((entry) => String(entry.id) === item.id);
         const payload = {
-        const oldItem = previous?.items.find((entry) => String(entry.id) === item.id);
-        const payload = {
           title: item.label,
-          description: oldItem?.description,
           description: oldItem?.description,
           responseType: toApiResponseType(item.responseType),
           required: item.required,
           observationRequiredOnFailure: item.allowObservation,
           evidenceRequiredOnFailure: item.requireEvidenceOnNonConformity,
-          optionsJson: item.responseType === 'SINGLE_SELECT' ? item.options?.map((option) => option.label.trim()) ?? [] : [],
           optionsJson: item.responseType === 'SINGLE_SELECT' ? item.options?.map((option) => option.label.trim()) ?? [] : [],
           displayOrder: itemIndex + 1,
         };
