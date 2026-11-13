@@ -80,7 +80,6 @@ const PUBLISHABLE_RESPONSE_TYPES: ResponseType[] = [
   'YES_NO',
   'NUMERIC',
   'DATE',
-  'SINGLE_SELECT',
   'BOOLEAN',
 ];
 
@@ -138,7 +137,7 @@ function createDefaultItem(
     responseType:
       'BOOLEAN',
     required: true,
-    allowObservation: true,
+    allowObservation: false,
     requireEvidenceOnNonConformity:
       true,
     order,
@@ -581,8 +580,13 @@ export default function TemplatesPage() {
     })));
   };
 
-  const handleDelete = () => {
-    showToast('A exclusão de modelos ainda não está disponível. O rascunho foi mantido.');
+  const handleDelete = async (template: InspectionTemplate) => {
+    if (template.status !== 'RASCUNHO' || !window.confirm(`Excluir o rascunho "${template.title}"?`)) return;
+    try {
+      await modeloInspecaoService.excluir(template.id);
+      setTemplates((current) => current.filter((item) => item.id !== template.id));
+      showToast('Rascunho excluído.');
+    } catch (error) { showToast(getApiErrorMessage(error, 'Não foi possível excluir o rascunho.')); }
   };
 
   const handleAddSection =
@@ -695,11 +699,6 @@ export default function TemplatesPage() {
         formSections[
           sectionIndex
         ];
-
-      if (/^\d+$/.test(section.items[itemIndex].id)) {
-        setEditorError('A exclusão de itens já salvos ainda não está disponível.');
-        return;
-      }
 
       if (
         section.items.length ===
@@ -1103,7 +1102,7 @@ export default function TemplatesPage() {
 
             <p className="text-xs text-amber-800 mt-1 leading-5">
               {isApiListAvailable
-                ? 'Rascunhos são salvos e podem ser editados. Use Copiar para preparar um novo rascunho a partir de qualquer modelo. A exclusão de modelos e de itens já salvos ainda não está disponível.'
+                ? 'Rascunhos, seções e itens são salvos na API. A API atual não armazena descrição do modelo nem opções de seleção.'
                 : 'Não foi possível carregar os modelos. Tente novamente para consultar os dados salvos.'}
             </p>
           </div>
@@ -1332,7 +1331,7 @@ export default function TemplatesPage() {
                     )
                   }
                   onDelete={() =>
-                    handleDelete()
+                    handleDelete(template)
                   }
                 />
               )
@@ -1498,10 +1497,10 @@ export default function TemplatesPage() {
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    handleDelete()
+                                    handleDelete(template)
                                   }
                                   className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
-                                  disabled title="Exclusão de rascunhos indisponível"
+                                  title="Excluir rascunho"
                                 >
                                   <Trash2
                                     size={
@@ -1866,7 +1865,7 @@ function TemplateCard({
                 onDelete
               }
               className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
-              disabled title="Exclusão de rascunhos indisponível"
+              title="Excluir rascunho"
             >
               <Trash2
                 size={15}
@@ -2072,7 +2071,7 @@ function PreviewModal({
 
                                     {item.requireEvidenceOnNonConformity && (
                                       <span className="px-2 py-0.5 rounded bg-amber-50 text-[11px] font-semibold text-amber-700">
-                                        Evidência obrigatória em não conformidade
+                                        Evidência obrigatória
                                       </span>
                                     )}
                                   </div>
@@ -2469,7 +2468,7 @@ function EditorModal({
                 instruções gerais
               </label>
 
-              <textarea
+              <textarea disabled aria-label="Descrição indisponível na API"
                 rows={3}
                 value={
                   formDescription
@@ -2482,7 +2481,7 @@ function EditorModal({
                       .value
                   )
                 }
-                placeholder="Descreva o objetivo, escopo ou instruções do modelo..."
+                placeholder="Descrição indisponível na API atual"
                 className="w-full py-2 px-3 border border-slate-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#10b981]"
               />
             </div>
@@ -2884,33 +2883,6 @@ function ItemEditor({
             <input
               type="checkbox"
               checked={
-                item.allowObservation
-              }
-              onChange={(
-                event
-              ) =>
-                onUpdate(
-                  (
-                    current
-                  ) => ({
-                    ...current,
-
-                    allowObservation:
-                      event.target
-                        .checked,
-                  })
-                )
-              }
-              className="accent-[#0f766e]"
-            />
-
-            Exigir observação em não conformidade
-          </label>
-
-          <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-            <input
-              type="checkbox"
-              checked={
                 item.requireEvidenceOnNonConformity
               }
               onChange={(
@@ -2931,14 +2903,13 @@ function ItemEditor({
               className="accent-[#0f766e]"
             />
 
-            Exigir evidência em
-            não conformidade
+            Exigir evidência
           </label>
         </div>
       </div>
 
       <p className="text-xs text-slate-500">
-        As regras de observação e evidência são exigidas quando a resposta indica não conformidade.
+        A evidência obrigatória é exigida para o item, independentemente do resultado.
         A resposta obrigatória é uma regra independente.
       </p>
 

@@ -7,7 +7,7 @@ beforeAll(() => { global.structuredClone = (value) => deserialize(serialize(valu
 
 jest.mock('@/components/layout/TopHeader', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/lib/api/services', () => ({ modeloInspecaoService: {
-  listarTodos: jest.fn(), criarRascunho: jest.fn(), salvarRascunho: jest.fn(), publicar: jest.fn(),
+  listarTodos: jest.fn(), criarRascunho: jest.fn(), salvarRascunho: jest.fn(), publicar: jest.fn(), excluir: jest.fn(), novaVersao: jest.fn(),
 } }));
 const template = {
   id: '1', title: 'Modelo salvo', description: '', category: 'Mecânica & Fluidos', status: 'RASCUNHO',
@@ -84,12 +84,11 @@ it('saves independent required, observation and evidence rules on the selected i
   render(<TemplatesPage />);
   fireEvent.click(await screen.findByTitle('Editar rascunho'));
   fireEvent.click(screen.getByLabelText('Resposta obrigatória'));
-  fireEvent.click(screen.getByLabelText('Exigir observação em não conformidade'));
-  fireEvent.click(screen.getByLabelText('Exigir evidência em não conformidade'));
+  fireEvent.click(screen.getByLabelText('Exigir evidência'));
   fireEvent.click(screen.getByRole('button', { name: 'Salvar rascunho' }));
   await waitFor(() => expect(modeloInspecaoService.salvarRascunho).toHaveBeenCalledWith('1', expect.objectContaining({
     sections: [expect.objectContaining({ items: [expect.objectContaining({
-      id: '20', required: true, allowObservation: true, requireEvidenceOnNonConformity: true,
+      id: '20', required: true, allowObservation: false, requireEvidenceOnNonConformity: true,
     })] })],
   })));
 });
