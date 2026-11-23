@@ -2337,10 +2337,17 @@ function EditorModal({
   onSaveDraft,
   onPublish,
 }: EditorModalProps) {
+  const checklistHeading = useRef<HTMLHeadingElement>(null);
+
+  function goToChecklist() {
+    checklistHeading.current?.focus({ preventScroll: true });
+    checklistHeading.current?.scrollIntoView({ block: 'start' });
+  }
+
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/60 p-4 flex items-center justify-center">
-      <div className="bg-white w-full max-w-5xl max-h-[94vh] rounded-xl shadow-2xl overflow-hidden flex flex-col">
-        <header className="p-5 md:p-6 bg-slate-50 border-b border-slate-200 flex items-start justify-between gap-4">
+    <div className="fixed inset-0 z-50 bg-slate-950/60 p-2 sm:p-4 flex items-center justify-center">
+      <div className="bg-white w-full max-w-5xl max-h-full rounded-xl shadow-2xl overflow-hidden flex flex-col">
+        <header className="p-4 md:p-6 bg-slate-50 border-b border-slate-200 shrink-0 flex items-start justify-between gap-2">
           <div>
             <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
               <FileText
@@ -2359,6 +2366,13 @@ function EditorModal({
               seções, itens e regras
               de resposta.
             </p>
+            <button
+              type="button"
+              onClick={goToChecklist}
+              className="mt-2 rounded border border-teal-300 bg-teal-50 px-3 py-1.5 text-sm font-semibold text-teal-800 hover:bg-teal-100"
+            >
+              Ir para o checklist ↓
+            </button>
           </div>
 
           <button
@@ -2372,7 +2386,8 @@ function EditorModal({
           </button>
         </header>
 
-        <fieldset disabled={isSaving} className="p-5 md:p-6 overflow-y-auto flex-1 space-y-6">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <fieldset disabled={isSaving} className="min-w-0 p-4 md:p-6 space-y-6">
           {editorError && (
             <div role="alert" className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-sm text-red-700">
               <AlertTriangle
@@ -2503,7 +2518,7 @@ function EditorModal({
           <section className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+                <h3 ref={checklistHeading} tabIndex={-1} className="scroll-mt-4 text-sm font-bold text-slate-800 uppercase tracking-wide">
                   2. Estrutura do
                   checklist
                 </h3>
@@ -2677,13 +2692,14 @@ function EditorModal({
             )}
           </section>
         </fieldset>
+        </div>
 
-        <footer className="p-4 md:px-6 bg-slate-50 border-t border-slate-200 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3">
-          <p className="text-[11px] text-slate-500 max-w-xl">
+        <footer className="p-3 md:px-6 bg-slate-50 border-t border-slate-200 shrink-0 flex flex-col-reverse lg:flex-row lg:items-center lg:justify-between gap-3">
+          <p className="hidden lg:block text-[11px] text-slate-500 max-w-xl">
             Publicar valida a estrutura, envia seções e itens à API e torna a versão somente leitura.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="grid grid-cols-2 sm:flex sm:justify-end gap-2">
             <button type="button" disabled={isSaving} onClick={onPreview} className="px-4 py-2 border border-teal-300 text-teal-800 rounded-lg text-sm font-semibold">Prévia do checklist</button>
             <button
               type="button" disabled={isSaving}
