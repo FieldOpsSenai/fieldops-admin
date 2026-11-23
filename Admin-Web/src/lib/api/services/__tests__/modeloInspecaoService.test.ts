@@ -6,12 +6,12 @@ const item = { id: 21, descricao: 'Há vazamento?', tipoResposta: 'BOOLEAN', ord
 const model = { id: 1, titulo: 'Compressor', categoria: 'Mecânica', versao: 1, status: 'RASCUNHO', dataCriacao: '2026-11-13T12:00:00', secoes: [{ id: 11, titulo: 'Motor', ordem: 1, itens: [item] }] };
 const sections = (): TemplateSection[] => [{ id: '11', title: 'Motor', order: 1, items: [{ id: '21', label: item.descricao, responseType: 'YES_NO', required: true, critical: true, allowObservation: false, requireEvidenceOnNonConformity: true, order: 1 }] }];
 const draft = () => ({ title: 'Revisado', description: '', category: 'Mecânica', sections: sections() });
-beforeEach(() => { jest.resetAllMocks(); jest.mocked(apiClient.get).mockResolvedValue({ data: model }); jest.mocked(apiClient.put).mockResolvedValue({ data: {} }); });
+beforeEach(() => { jest.resetAllMocks(); jest.mocked(apiClient.get).mockResolvedValue({ data: model }); jest.mocked(apiClient.put).mockResolvedValue({ data: model }); });
 
 it('persiste edição e regras sem remover a marcação de item crítico', async () => {
   const result = await modeloInspecaoService.salvarRascunho('1', draft());
-  expect(apiClient.put).toHaveBeenCalledWith('/modelos-inspecao/1', { titulo: 'Revisado', categoria: 'Mecânica' });
-  expect(apiClient.put).toHaveBeenCalledWith('/modelos-inspecao/itens/21', expect.objectContaining({ tipoResposta: 'BOOLEAN', obrigatorio: true, critico: true, evidenciaObrigatoria: true }));
+  expect(apiClient.put).toHaveBeenCalledTimes(1);
+  expect(apiClient.put).toHaveBeenCalledWith('/modelos-inspecao/1', { titulo: 'Revisado', categoria: 'Mecânica', secoes: [{ titulo: 'Motor', ordem: 1, itens: [expect.objectContaining({ tipoResposta: 'BOOLEAN', obrigatorio: true, critico: true, evidenciaObrigatoria: true })] }] });
   expect(result.sections[0].items[0]).toMatchObject({ responseType: 'YES_NO', critical: true });
 });
 it('recusa alterações em modelo publicado', async () => {
@@ -19,11 +19,22 @@ it('recusa alterações em modelo publicado', async () => {
   await expect(modeloInspecaoService.salvarRascunho('1', draft())).rejects.toThrow('imutáveis');
   expect(apiClient.put).not.toHaveBeenCalled();
 });
-it('exclui itens removidos somente após atualizações confirmadas', async () => {
+it('envia remoções junto da estrutura completa, sem excluir itens em requisições separadas', async () => {
   const data = draft(); data.sections[0].items = [];
   await modeloInspecaoService.salvarRascunho('1', data);
-  expect(apiClient.delete).toHaveBeenCalledWith('/modelos-inspecao/itens/21');
-  expect(jest.mocked(apiClient.delete).mock.invocationCallOrder[0]).toBeGreaterThan(jest.mocked(apiClient.put).mock.invocationCallOrder.at(-1)!);
+  expect(apiClient.put).toHaveBeenCalledWith('/modelos-inspecao/1', expect.objectContaining({ secoes: [{ titulo: 'Motor', ordem: 1, itens: [] }] }));
+  expect(apiClient.delete).not.toHaveBeenCalled();
+});
+it('preserva o formulário após falha e reenvia a mesma árvore sem criar itens duplicados', async () => {
+  const data = draft();
+  const original = JSON.stringify(data);
+  jest.mocked(apiClient.put).mockRejectedValueOnce(new Error('Falha na transação'));
+  await expect(modeloInspecaoService.salvarRascunho('1', data)).rejects.toThrow('Falha na transação');
+  expect(JSON.stringify(data)).toBe(original);
+  await modeloInspecaoService.salvarRascunho('1', data);
+  expect(jest.mocked(apiClient.put).mock.calls[0]).toEqual(jest.mocked(apiClient.put).mock.calls[1]);
+  expect(apiClient.post).not.toHaveBeenCalled();
+  expect(apiClient.delete).not.toHaveBeenCalled();
 });
 it('impede salvar descrição ou opções que a API não suporta', async () => {
   await expect(modeloInspecaoService.salvarRascunho('1', { ...draft(), description: 'Não suportado' })).rejects.toThrow('descrição');

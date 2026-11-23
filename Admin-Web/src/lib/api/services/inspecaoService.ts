@@ -36,7 +36,7 @@ export interface InspecaoRequest {
 export interface ApiInspection {
   id: number;
   title: string;
-  status: 'DRAFT' | 'ASSIGNED' | 'IN_PROGRESS' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'CANCELED';
+  status: 'DRAFT' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELED';
   dueDate?: string;
   dueTime?: string;
   scheduledDate?: string;
@@ -49,12 +49,17 @@ export interface ApiInspection {
   progress?: number;
   overdue?: boolean;
   instructions?: string;
+  completedAt?: string;
+  observations?: string;
+  templateId?: number;
+  templateVersion?: number;
 }
 
 interface ApiMainInspection {
   id: number; descricao: string; status: 'AGENDADA' | 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA';
   dataAgendada: string; dataLimite?: string; clienteNome?: string; localNome?: string; equipamentoNome?: string;
   usuarioId?: number; usuarioNome?: string; prioridade?: 'BAIXA' | 'MEDIA' | 'ALTA' | 'URGENTE'; instrucoes?: string;
+  dataRealizacao?: string; observacoes?: string; modeloId?: number; modeloVersao?: number;
 }
 
 export interface InspectionQuery {
@@ -70,7 +75,7 @@ function fromApiInspection(inspection: ApiInspection): InspecaoDTO {
   const status: InspecaoStatus =
     inspection.status === 'DRAFT' || inspection.status === 'ASSIGNED'
       ? 'PENDENTE'
-      : inspection.status === 'IN_PROGRESS' || inspection.status === 'UNDER_REVIEW' || inspection.status === 'REJECTED'
+      : inspection.status === 'IN_PROGRESS'
         ? 'EM_ANDAMENTO'
         : inspection.status === 'CANCELED'
           ? 'CANCELADA'
@@ -94,7 +99,7 @@ function fromApiInspection(inspection: ApiInspection): InspecaoDTO {
 
 export const inspecaoService = {
   async listarPagina(query: InspectionQuery, signal?: AbortSignal): Promise<ApiPage<ApiInspection>> {
-    const statuses: Partial<Record<ApiInspection['status'], ApiMainInspection['status']>> = { DRAFT: 'PENDENTE', ASSIGNED: 'AGENDADA', IN_PROGRESS: 'EM_ANDAMENTO', APPROVED: 'CONCLUIDA', CANCELED: 'CANCELADA' };
+    const statuses: Record<ApiInspection['status'], ApiMainInspection['status']> = { DRAFT: 'PENDENTE', ASSIGNED: 'AGENDADA', IN_PROGRESS: 'EM_ANDAMENTO', COMPLETED: 'CONCLUIDA', CANCELED: 'CANCELADA' };
     const priorities = { LOW: 'BAIXA', MEDIUM: 'MEDIA', HIGH: 'ALTA', CRITICAL: 'URGENTE' } as const;
     const response = await apiClient.get<ApiPage<ApiMainInspection>>('/inspecoes', { params: {
       page: query.page, size: query.size, termo: apiSearchTerm(query.name), ...(query.sort ? { sort: query.sort } : {}),
@@ -103,13 +108,30 @@ export const inspecaoService = {
       clienteId: query.clientName ? Number(query.clientName) : undefined,
       prioridade: query.priority ? priorities[query.priority] : undefined,
     }, signal });
-    const statusMap: Record<ApiMainInspection['status'], ApiInspection['status']> = { PENDENTE: 'DRAFT', AGENDADA: 'ASSIGNED', EM_ANDAMENTO: 'IN_PROGRESS', CONCLUIDA: 'APPROVED', CANCELADA: 'CANCELED' };
+    const statusMap: Record<ApiMainInspection['status'], ApiInspection['status']> = { PENDENTE: 'DRAFT', AGENDADA: 'ASSIGNED', EM_ANDAMENTO: 'IN_PROGRESS', CONCLUIDA: 'COMPLETED', CANCELADA: 'CANCELED' };
     const priorityMap = { BAIXA: 'LOW', MEDIA: 'MEDIUM', ALTA: 'HIGH', URGENTE: 'CRITICAL' } as const;
     return mapApiPage(response.data, (item) => ({ id: item.id, title: item.descricao, status: statusMap[item.status],
       scheduledDate: item.dataAgendada, dueDate: item.dataLimite, clientName: item.clienteNome, siteName: item.localNome,
       equipmentName: item.equipamentoNome, technicianId: item.usuarioId, technicianName: item.usuarioNome,
       priority: item.prioridade ? priorityMap[item.prioridade] : undefined, instructions: item.instrucoes,
+      completedAt: item.dataRealizacao, observations: item.observacoes, templateId: item.modeloId, templateVersion: item.modeloVersao,
       overdue: !!item.dataLimite && !['CONCLUIDA', 'CANCELADA'].includes(item.status) && new Date(item.dataLimite).getTime() < Date.now() }));
+  },
+  // A API main ainda não expõe GET /inspecoes/{id} para gestores.
+  // Percorre as páginas até localizar o registro, sem presumir que está na primeira.
+  async buscarPorId(id: number, signal?: AbortSignal): Promise<ApiInspection> {
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Identificador de inspeção inválido.');
+    let page = 0;
+    let pages = 1;
+    while (page < pages) {
+      const result = await this.listarPagina({ page, size: 100, sort: 'id,desc' }, signal);
+      if (result.number !== page) throw new Error('A API retornou uma página diferente da solicitada.');
+      const inspection = result.content.find((item) => item.id === id);
+      if (inspection) return inspection;
+      pages = result.totalPages;
+      page += 1;
+    }
+    throw new Error('Inspeção não encontrada ou sem acesso.');
   },
   async listarTodas(): Promise<InspecaoDTO[]> {
     return (await collectPages((page) => this.listarPagina({ page, size: 100 }))).map(fromApiInspection);
@@ -133,7 +155,7 @@ export const inspecaoService = {
     }
     const deadline = new Date(data.dataAgendada);
     if (!Number.isFinite(deadline.getTime()) || deadline.getTime() <= Date.now()) {
-      throw new Error('Informe um prazo futuro válido.');
+      throw new Error('Informe uma data agendada futura válida.');
     }
 
     const dateTime = data.dataAgendada.replace(' ', 'T');

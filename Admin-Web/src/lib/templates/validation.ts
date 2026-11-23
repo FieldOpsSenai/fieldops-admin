@@ -5,8 +5,8 @@ export function validateTemplateItems(sections: TemplateSection[]): string[] {
   for (const [sectionIndex, section] of sections.entries()) {
     for (const [itemIndex, item] of section.items.entries()) {
       const prefix = `Item ${sectionIndex + 1}.${itemIndex + 1}:`;
-      if (!item.label.trim() || item.label.trim().length > 500) {
-        errors.push(`${prefix} informe um enunciado com até 500 caracteres.`);
+      if (!item.label.trim() || item.label.trim().length > 255) {
+        errors.push(`${prefix} informe um enunciado com até 255 caracteres.`);
       }
       if (item.responseType === 'MULTI_SELECT') errors.push(`${prefix} seleção múltipla não está disponível.`);
       if (item.responseType === 'SINGLE_SELECT') {

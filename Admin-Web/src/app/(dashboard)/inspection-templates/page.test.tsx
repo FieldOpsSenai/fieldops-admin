@@ -133,3 +133,18 @@ it('creates the next draft version through the API and keeps the published model
   expect(screen.getAllByRole('option', { name: 'Categoria existente' }).some((option) => (option as HTMLOptionElement).selected)).toBe(true);
   expect(screen.getAllByRole('heading', { name: 'Modelo salvo' })).toHaveLength(2);
 });
+
+it('preserva a regra de evidência da origem ao salvar uma nova versão', async () => {
+  const sections = [{ id: '10', title: 'Motor', order: 1, items: [{ id: '20', label: 'Sem vazamento?', responseType: 'BOOLEAN', order: 1, required: true, critical: true, allowObservation: false, requireEvidenceOnNonConformity: true }] }];
+  const published = { ...template, status: 'PUBLICADO', sections };
+  const next = { ...template, id: '2', version: 2, sections: [{ ...sections[0], id: '30', items: [{ ...sections[0].items[0], id: '40', requireEvidenceOnNonConformity: false }] }] };
+  jest.mocked(modeloInspecaoService.listarTodos).mockResolvedValue([published] as never);
+  jest.mocked(modeloInspecaoService.novaVersao).mockResolvedValue(next as never);
+  jest.mocked(modeloInspecaoService.salvarRascunho).mockResolvedValue(next as never);
+  render(<TemplatesPage />);
+  fireEvent.click(await screen.findByTitle('Criar nova versão'));
+  expect(await screen.findByLabelText('Exigir evidência')).toBeChecked();
+  expect(screen.getByLabelText('Item crítico')).toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: 'Salvar rascunho' }));
+  await waitFor(() => expect(modeloInspecaoService.salvarRascunho).toHaveBeenCalledWith('2', expect.objectContaining({ sections })));
+});

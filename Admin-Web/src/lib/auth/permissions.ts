@@ -101,5 +101,6 @@ export function canPlanInspections(
 export function canReviewInspections(
   profile?: string | null
 ): boolean {
-  return isAdministrativeRole(profile);
+  // O contrato atual de revisão exige supervisorId com perfil SUPERVISOR.
+  return normalizeRole(profile) === 'SUPERVISOR';
 }

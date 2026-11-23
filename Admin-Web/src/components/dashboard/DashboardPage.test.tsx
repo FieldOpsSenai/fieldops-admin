@@ -14,7 +14,7 @@ beforeEach(() => {
   jest.mocked(equipamentoService.listarPagina).mockResolvedValue(page(35) as never);
   jest.mocked(inspecaoService.listarPagina).mockImplementation(async (query) => {
     if (query.sort) return page(1, [{ id: 9, title: 'Inspeção recente', status: 'ASSIGNED' }]) as never;
-    const counts = { DRAFT: 3, ASSIGNED: 4, IN_PROGRESS: 5, APPROVED: 10 };
+    const counts = { DRAFT: 3, ASSIGNED: 4, IN_PROGRESS: 5, COMPLETED: 10 };
     return page(query.status ? counts[query.status as keyof typeof counts] : 315) as never;
   });
 });

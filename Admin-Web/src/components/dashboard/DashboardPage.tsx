@@ -7,7 +7,7 @@ import { clienteService, equipamentoService, inspecaoService, type ApiInspection
 
 type Snapshot = { inspections: number | null; pending: number | null; completed: number | null; equipment: number | null; clients: number | null; recent: ApiInspection[] | null };
 const empty: Snapshot = { inspections: null, pending: null, completed: null, equipment: null, clients: null, recent: null };
-const labels: Record<ApiInspection['status'], string> = { DRAFT: 'Pendente', ASSIGNED: 'Agendada', IN_PROGRESS: 'Em andamento', APPROVED: 'Concluída', CANCELED: 'Cancelada', SUBMITTED: 'Enviada', UNDER_REVIEW: 'Em revisão', REJECTED: 'Rejeitada' };
+const labels: Record<ApiInspection['status'], string> = { DRAFT: 'Pendente', ASSIGNED: 'Agendada', IN_PROGRESS: 'Em andamento', COMPLETED: 'Concluída', CANCELED: 'Cancelada' };
 
 export default function DashboardPage() {
   const [data, setData] = useState<Snapshot>(empty);
@@ -21,7 +21,7 @@ export default function DashboardPage() {
     void Promise.allSettled([
       count(),
       Promise.all([count('DRAFT'), count('ASSIGNED'), count('IN_PROGRESS')]).then((values) => values.reduce((sum, value) => sum + value, 0)),
-      count('APPROVED'),
+      count('COMPLETED'),
       equipamentoService.listarPagina({ page: 0, size: 1, status: 'ACTIVE' }, controller.signal).then((page) => page.totalElements),
       clienteService.listarPagina({ page: 0, size: 1, status: 'ACTIVE' }, controller.signal).then((page) => page.totalElements),
       inspecaoService.listarPagina({ page: 0, size: 5, sort: 'id,desc' }, controller.signal).then((page) => page.content),

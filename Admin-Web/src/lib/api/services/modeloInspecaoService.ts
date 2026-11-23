@@ -54,26 +54,17 @@ export const modeloInspecaoService = {
     validate(data);
     const current = (await apiClient.get<ApiModel>(`${base}/${id}`)).data;
     if (current.status !== 'RASCUNHO') throw new Error('Versões publicadas são imutáveis.');
-    await apiClient.put(`${base}/${id}`, { titulo: data.title, categoria: data.category });
-    for (const [index, section] of data.sections.entries()) {
-      const previous = current.secoes.find((entry) => String(entry.id) === section.id);
-      const payload = { titulo: section.title.trim(), ordem: index + 1 };
-      if (previous) await apiClient.put(`${base}/secoes/${section.id}`, payload);
-      else section.id = String((await apiClient.post<ApiSection>(`${base}/${id}/secoes`, payload)).data.id);
-      for (const [itemIndex, item] of section.items.entries()) {
-        const oldItem = previous?.itens.find((entry) => String(entry.id) === item.id);
-        if (oldItem) await apiClient.put(`${base}/itens/${item.id}`, itemPayload(item, itemIndex));
-        else item.id = String((await apiClient.post<ApiItem>(`${base}/secoes/${section.id}/itens`, itemPayload(item, itemIndex))).data.id);
-      }
-    }
-    for (const section of current.secoes) {
-      const retained = data.sections.find((entry) => entry.id === String(section.id));
-      if (!retained) await apiClient.delete(`${base}/secoes/${section.id}`);
-      else for (const item of section.itens) {
-        if (!retained.items.some((entry) => entry.id === String(item.id))) await apiClient.delete(`${base}/itens/${item.id}`);
-      }
-    }
-    return this.buscarPorId(id);
+    // O PUT da API aceita a árvore completa e a salva na mesma transação.
+    // IDs de seções/itens do rascunho são substituídos; snapshots publicados
+    // continuam imutáveis. Não há sequência de escritas parcialmente confirmadas.
+    const response = await apiClient.put<ApiModel>(`${base}/${id}`, {
+      titulo: data.title.trim(), categoria: data.category,
+      secoes: data.sections.map((section, index) => ({
+        titulo: section.title.trim(), ordem: index + 1,
+        itens: section.items.map(itemPayload),
+      })),
+    });
+    return mapModel(response.data);
   },
   async excluir(id: string): Promise<void> { await apiClient.delete(`${base}/${id}`); },
   async publicar(id: string): Promise<MappedModel> { return mapModel((await apiClient.patch<ApiModel>(`${base}/${id}/publicar`)).data); },

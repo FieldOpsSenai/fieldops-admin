@@ -575,7 +575,11 @@ export default function TemplatesPage() {
         const draft = await modeloInspecaoService.novaVersao(template.id);
         setTemplates((current) => [draft, ...current]);
         handleOpenEdit(draft);
-        showToast(`Versão ${draft.version} criada como rascunho.`);
+        // A API atual omite evidenciaObrigatoria ao copiar uma versão.
+        // A árvore publicada é imutável e serve de origem para o editor;
+        // o próximo PUT salva todas as regras no ID do novo rascunho.
+        setFormSections(cloneSections(template.sections));
+        showToast(`Versão ${draft.version} criada. Revise e salve o rascunho para confirmar todas as regras copiadas.`);
       } catch (error) { showToast(getApiErrorMessage(error, 'Não foi possível criar uma nova versão.')); }
       return;
     }
@@ -1013,7 +1017,7 @@ export default function TemplatesPage() {
       setIsEditorOpen(false);
     } catch (error) {
       setFormSections(data.sections);
-      setEditorError(getApiErrorMessage(error, 'Não foi possível salvar o modelo. As alterações confirmadas foram mantidas; tente novamente.'));
+      setEditorError(getApiErrorMessage(error, 'Não foi possível salvar o modelo. Os valores do formulário foram mantidos; tente novamente.'));
     } finally {
       savingRef.current = false;
       setIsSaving(false);
@@ -2779,7 +2783,7 @@ function ItemEditor({
           <input
             type="text"
             aria-label={`Enunciado do item ${sectionIndex + 1}.${itemIndex + 1}`}
-            maxLength={500}
+            maxLength={255}
             value={
               item.label
             }
@@ -2886,6 +2890,11 @@ function ItemEditor({
             />
 
             Resposta obrigatória
+          </label>
+
+          <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+            <input type="checkbox" checked={item.critical ?? false} onChange={(event) => onUpdate((current) => ({ ...current, critical: event.target.checked }))} className="accent-[#0f766e]" />
+            Item crítico
           </label>
 
           <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">

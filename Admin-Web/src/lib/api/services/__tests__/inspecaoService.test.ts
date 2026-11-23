@@ -8,6 +8,22 @@ const request: InspecaoRequest = {
 };
 beforeEach(() => jest.resetAllMocks());
 
+it('localiza detalhes além da primeira página e preserva conclusão sem inferir aprovação', async () => {
+  jest.mocked(apiClient.get)
+    .mockResolvedValueOnce({ data: { content: [], number: 0, totalPages: 2, totalElements: 101, size: 100 } })
+    .mockResolvedValueOnce({ data: { content: [{ id: 77, descricao: 'Inspeção', status: 'CONCLUIDA', dataAgendada: '2030-01-01', modeloId: 3, modeloVersao: 2 }], number: 1, totalPages: 2, totalElements: 101, size: 100 } });
+  const result = await inspecaoService.buscarPorId(77);
+  expect(result).toMatchObject({ id: 77, status: 'COMPLETED', templateId: 3, templateVersion: 2 });
+  expect(apiClient.get).toHaveBeenCalledTimes(2);
+});
+
+it('informa inspeção inexistente e rejeita identificador inválido antes da consulta', async () => {
+  await expect(inspecaoService.buscarPorId(-1)).rejects.toThrow('inválido');
+  expect(apiClient.get).not.toHaveBeenCalled();
+  jest.mocked(apiClient.get).mockResolvedValue({ data: { content: [], number: 0, totalPages: 0, totalElements: 0, size: 100 } });
+  await expect(inspecaoService.buscarPorId(77)).rejects.toThrow('não encontrada');
+});
+
 it('schedules using the selected version ID and the ID confirmed by the API', async () => {
   jest.mocked(apiClient.post).mockResolvedValue({ data: { id: 77, descricao: request.descricao, status: 'AGENDADA' } });
   const result = await inspecaoService.criar(request);
@@ -24,8 +40,8 @@ it('does not schedule without a published version', async () => {
 });
 
 it.each([
-  [{ dataAgendada: '2000-01-01T12:00:00' }, 'prazo futuro'],
-  [{ dataAgendada: 'inválida' }, 'prazo futuro'],
+  [{ dataAgendada: '2000-01-01T12:00:00' }, 'data agendada futura'],
+  [{ dataAgendada: 'inválida' }, 'data agendada futura'],
   [{ dataLimite: '2030-01-01T12:00:00' }, 'igual ou posterior'],
   [{ descricao: ' ' }, 'título'],
   [{ observacoes: 'a'.repeat(2001) }, 'instruções'],

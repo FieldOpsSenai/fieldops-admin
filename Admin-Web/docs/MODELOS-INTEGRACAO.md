@@ -1,13 +1,21 @@
 # Modelos de inspeção — integração web
 
-A API principal usa `/api/modelos-inspecao` (sem `/v1`). O proxy web encaminha esse recurso mantendo o token em cookie HttpOnly. Modelos em rascunho, seções e itens podem ser criados, editados e excluídos; a publicação é feita pela API e modelos publicados não podem ser editados diretamente.
+A API usa `/api/modelos-inspecao`, sem `/v1`. O proxy adapta o caminho mantendo os tokens em cookies HttpOnly.
 
-As operações de estrutura são individuais. Se o salvamento falhar, parte das alterações pode já estar no banco. O editor mantém os identificadores das etapas confirmadas para uma retentativa.
+Rascunhos, seções e itens podem ser criados, editados, ordenados e excluídos. A prévia usa os valores do editor e não escreve na API. A publicação valida a estrutura e aguarda confirmação; versões publicadas permanecem somente leitura.
 
-A API atual não armazena descrição geral do modelo, opções de seleção ou regra de observação obrigatória. Esses controles não são apresentados como persistidos. A regra de evidência é obrigatória para o item, independentemente do resultado.
+## Salvamento
 
-O botão de nova versão cria um rascunho pela rota `/nova-versao`, sem alterar o publicado. A API não oferece histórico separado com data e responsável pela publicação. A listagem retorna os modelos disponíveis com seus números de versão.
+O PUT do modelo aceita título, categoria e a árvore completa de seções e itens em uma transação. A web usa essa operação para evitar várias escritas parciais. A resposta fornece os novos IDs dos itens do rascunho. Reenviar a árvore substitui a estrutura, sem acrescentar itens duplicados.
 
-O endpoint paginado da API retorna erro com busca nula no PostgreSQL; o web envia `%` como curinga para consulta sem filtro até que o backend trate o parâmetro nulo.
+Em falha, o editor mantém os valores. A criação inicial é um POST separado: se a conexão cair sem resposta, confira a listagem antes de recriar. Idempotência definitiva depende da API.
 
-Validação local: login, listagem, criação e exclusão de rascunho com seção e item executados contra a API main no Docker. Testes automatizados cobrem os fluxos e as limitações do contrato.
+## Limites do contrato
+
+- Descrição geral, opções de seleção e observação obrigatória não são persistidas pela API; não são oferecidas como funcionais na web.
+- Evidência obrigatória vale independentemente do resultado.
+- A API não expõe histórico separado de publicação com data e responsável.
+- A cópia da nova versão no backend omite a regra de evidência. O editor preserva as regras da origem para salvar no novo rascunho.
+- Busca vazia usa `%` devido à falha da consulta atual com parâmetro nulo no PostgreSQL.
+
+Veja [dependências da API](PENDENCIAS-API.md) e [demonstração](DEMONSTRACAO.md).
