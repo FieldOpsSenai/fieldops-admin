@@ -59,4 +59,3 @@ it('edits priority, deadline and instructions through the API', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Salvar planejamento' }));
   await waitFor(() => expect(inspecaoService.atualizarPlanejamento).toHaveBeenCalledWith(42, { priority: 'HIGH', dueDate: '2031-02-01T15:30', instructions: 'Usar EPIs' }));
 });
-
