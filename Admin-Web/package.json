@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:docker": "node scripts/dev-docker.mjs",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",

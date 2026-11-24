@@ -4,7 +4,7 @@ import { validateTemplateItems } from '@/lib/templates/validation';
 import type { ResponseType, Template, TemplateItem, TemplateSection } from '@/types';
 
 export interface ModeloInspecaoPublicado { versaoId: number; modeloId: number; titulo: string; categoria: string; versao: number }
-interface ApiItem { id: number; descricao: string; tipoResposta: string; ordem: number; obrigatorio: boolean; critico: boolean; evidenciaObrigatoria: boolean }
+interface ApiItem { id: number; descricao: string; tipoResposta: string; ordem: number; obrigatorio: boolean; critico: boolean; evidenciaObrigatoria?: boolean }
 interface ApiSection { id: number; titulo: string; ordem: number; itens: ApiItem[] }
 interface ApiModel { id: number; titulo: string; categoria: string; versao: number; status: 'RASCUNHO' | 'PUBLICADO'; dataCriacao: string; secoes: ApiSection[] }
 type DraftData = { title: string; description: string; category: string; sections: TemplateSection[] };
@@ -19,7 +19,7 @@ function responseType(value: string): ResponseType {
 }
 function mapItem(item: ApiItem): TemplateItem {
   return { id: String(item.id), label: item.descricao, responseType: responseType(item.tipoResposta), required: item.obrigatorio,
-    critical: item.critico, allowObservation: false, requireEvidenceOnNonConformity: item.evidenciaObrigatoria, order: item.ordem };
+    critical: item.critico, allowObservation: false, requireEvidenceOnNonConformity: item.evidenciaObrigatoria ?? false, order: item.ordem };
 }
 function mapModel(model: ApiModel): MappedModel {
   return { id: String(model.id), title: model.titulo, description: '', category: model.categoria, version: model.versao,
@@ -70,7 +70,11 @@ export const modeloInspecaoService = {
   async publicar(id: string): Promise<MappedModel> { return mapModel((await apiClient.patch<ApiModel>(`${base}/${id}/publicar`)).data); },
   async novaVersao(id: string): Promise<MappedModel> { return mapModel((await apiClient.post<ApiModel>(`${base}/${id}/nova-versao`)).data); },
   async listarTodos(): Promise<MappedModel[]> {
-    const models = await collectPages(async (page) => (await apiClient.get<ApiPage<ApiModel>>(base, { params: { page, size: 100, termo: apiSearchTerm() } })).data);
+    const params = { size: 100, termo: apiSearchTerm() };
+    const { data } = await apiClient.get<ApiPage<ApiModel> | ApiModel[]>(base, { params: { ...params, page: 0 } });
+    if (Array.isArray(data)) return data.map(mapModel);
+    const models = await collectPages(async (page) =>
+      page === 0 ? data : (await apiClient.get<ApiPage<ApiModel>>(base, { params: { ...params, page } })).data);
     return models.map(mapModel);
   },
   async listarPublicados(): Promise<ModeloInspecaoPublicado[]> {

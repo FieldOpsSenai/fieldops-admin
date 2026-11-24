@@ -1,5 +1,8 @@
 import apiClient from '../axios';
-import { apiSearchTerm, collectPages, mapApiPage, type ApiPage } from './apiPage';
+import { apiSearchTerm, collectPages, mapApiPage, matchesSearch, paginateList, type ApiPage } from './apiPage';
+import { clienteService } from './clienteService';
+import { equipamentoService } from './equipamentoService';
+import { localService } from './localService';
 
 export type InspecaoStatus = 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA';
 
@@ -40,6 +43,7 @@ export interface ApiInspection {
   dueDate?: string;
   dueTime?: string;
   scheduledDate?: string;
+  equipmentId?: number;
   equipmentName?: string;
   technicianId?: number;
   technicianName?: string;
@@ -58,6 +62,7 @@ export interface ApiInspection {
 interface ApiMainInspection {
   id: number; descricao: string; status: 'AGENDADA' | 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA';
   dataAgendada: string; dataLimite?: string; clienteNome?: string; localNome?: string; equipamentoNome?: string;
+  clienteId?: number; equipamentoId?: number;
   usuarioId?: number; usuarioNome?: string; prioridade?: 'BAIXA' | 'MEDIA' | 'ALTA' | 'URGENTE'; instrucoes?: string;
   dataRealizacao?: string; observacoes?: string; modeloId?: number; modeloVersao?: number;
 }
@@ -90,18 +95,45 @@ function fromApiInspection(inspection: ApiInspection): InspecaoDTO {
     dataAgendada: inspection.dueTime && !scheduled.includes('T')
       ? `${scheduled}T${inspection.dueTime}`
       : scheduled,
-    equipamentoId: 0,
+    equipamentoId: inspection.equipmentId ?? 0,
     equipamentoNome: inspection.equipmentName,
     usuarioId: inspection.technicianId ?? 0,
     usuarioNome: inspection.technicianName,
   };
 }
 
+async function completeEquipmentContext(inspection: ApiInspection, signal?: AbortSignal) {
+  if (!inspection.equipmentId || (inspection.siteName && inspection.clientName)) return inspection;
+
+  try {
+    const assets = await collectPages((page) => equipamentoService.listarPagina({ page, size: 100 }, signal));
+    const asset = assets.find((item) => item.id === inspection.equipmentId);
+    if (!asset?.localId) return inspection;
+
+    const sites = await collectPages((page) => localService.listarPagina({ page, size: 100 }, signal));
+    const site = sites.find((item) => item.id === asset.localId);
+    const context = {
+      ...inspection,
+      equipmentName: inspection.equipmentName || asset.nome,
+      siteName: inspection.siteName || site?.nome || asset.localNome,
+      clientName: inspection.clientName || site?.clienteNome,
+    };
+    if (!context.clientName && site?.clienteId && !signal?.aborted) {
+      const client = await clienteService.buscarPorId(site.clienteId, signal).catch(() => undefined);
+      context.clientName = client?.nome;
+    }
+    return context;
+  } catch {
+    // O cadastro do equipamento é complementar ao registro da inspeção.
+    return inspection;
+  }
+}
+
 export const inspecaoService = {
   async listarPagina(query: InspectionQuery, signal?: AbortSignal): Promise<ApiPage<ApiInspection>> {
     const statuses: Record<ApiInspection['status'], ApiMainInspection['status']> = { DRAFT: 'PENDENTE', ASSIGNED: 'AGENDADA', IN_PROGRESS: 'EM_ANDAMENTO', COMPLETED: 'CONCLUIDA', CANCELED: 'CANCELADA' };
     const priorities = { LOW: 'BAIXA', MEDIUM: 'MEDIA', HIGH: 'ALTA', CRITICAL: 'URGENTE' } as const;
-    const response = await apiClient.get<ApiPage<ApiMainInspection>>('/inspecoes', { params: {
+    const response = await apiClient.get<ApiPage<ApiMainInspection> | ApiMainInspection[]>('/inspecoes', { params: {
       page: query.page, size: query.size, termo: apiSearchTerm(query.name), ...(query.sort ? { sort: query.sort } : {}),
       status: query.status ? statuses[query.status] : undefined,
       usuarioId: query.technicianName ? Number(query.technicianName) : undefined,
@@ -110,9 +142,23 @@ export const inspecaoService = {
     }, signal });
     const statusMap: Record<ApiMainInspection['status'], ApiInspection['status']> = { PENDENTE: 'DRAFT', AGENDADA: 'ASSIGNED', EM_ANDAMENTO: 'IN_PROGRESS', CONCLUIDA: 'COMPLETED', CANCELADA: 'CANCELED' };
     const priorityMap = { BAIXA: 'LOW', MEDIA: 'MEDIUM', ALTA: 'HIGH', URGENTE: 'CRITICAL' } as const;
-    return mapApiPage(response.data, (item) => ({ id: item.id, title: item.descricao, status: statusMap[item.status],
+    const { data } = response;
+    let page: ApiPage<ApiMainInspection>;
+    if (Array.isArray(data)) {
+      const inspections = data.filter((item) =>
+        (!query.status || item.status === statuses[query.status]) &&
+        (!query.technicianName || item.usuarioId === Number(query.technicianName)) &&
+        (!query.clientName || item.clienteId === Number(query.clientName)) &&
+        (!query.priority || item.prioridade === priorities[query.priority]) &&
+        matchesSearch(query.name, item.descricao));
+      if (query.sort === 'id,desc') inspections.sort((a, b) => b.id - a.id);
+      page = paginateList(inspections, query);
+    } else {
+      page = data;
+    }
+    return mapApiPage(page, (item) => ({ id: item.id, title: item.descricao, status: statusMap[item.status],
       scheduledDate: item.dataAgendada, dueDate: item.dataLimite, clientName: item.clienteNome, siteName: item.localNome,
-      equipmentName: item.equipamentoNome, technicianId: item.usuarioId, technicianName: item.usuarioNome,
+      equipmentId: item.equipamentoId, equipmentName: item.equipamentoNome, technicianId: item.usuarioId, technicianName: item.usuarioNome,
       priority: item.prioridade ? priorityMap[item.prioridade] : undefined, instructions: item.instrucoes,
       completedAt: item.dataRealizacao, observations: item.observacoes, templateId: item.modeloId, templateVersion: item.modeloVersao,
       overdue: !!item.dataLimite && !['CONCLUIDA', 'CANCELADA'].includes(item.status) && new Date(item.dataLimite).getTime() < Date.now() }));
@@ -127,7 +173,7 @@ export const inspecaoService = {
       const result = await this.listarPagina({ page, size: 100, sort: 'id,desc' }, signal);
       if (result.number !== page) throw new Error('A API retornou uma página diferente da solicitada.');
       const inspection = result.content.find((item) => item.id === id);
-      if (inspection) return inspection;
+      if (inspection) return completeEquipmentContext(inspection, signal);
       pages = result.totalPages;
       page += 1;
     }

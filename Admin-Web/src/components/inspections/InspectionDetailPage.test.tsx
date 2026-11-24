@@ -146,13 +146,29 @@ it('bloqueia revisão com consulta incompleta e permite recarregar sem esconder 
   expect(await screen.findByRole('button', { name: 'Revisar decisão' })).toBeEnabled();
 });
 
-it('não permite que administrador envie supervisorId de outra pessoa', async () => {
+it('explica quando a versão da API não possui as rotas de revisão', async () => {
+  jest.mocked(revisaoService.snapshot).mockRejectedValue(new Error('No static resource api/v1/inspecoes/42/snapshot.'));
+  jest.mocked(revisaoService.respostas).mockRejectedValue(new Error('No static resource api/v1/inspecoes/42/respostas.'));
+  render(<InspectionDetailPage id={42} />);
+
+  expect(await screen.findByText(/A revisão fica indisponível até a atualização da API/)).toBeInTheDocument();
+  expect(screen.queryByText(/No static resource/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Revisar decisão' })).not.toBeInTheDocument();
+});
+
+it('permite ao administrador revisar com o identificador da própria sessão', async () => {
   useSessionStore.setState({
     session: { userId: '1', name: 'Admin', email: 'admin@example.test', profile: 'ADMINISTRADOR' },
   });
   render(<InspectionDetailPage id={42} />);
-  expect(await screen.findByText(/Entre com um perfil de supervisor/)).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Revisar decisão' })).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole('button', { name: 'Revisar decisão' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar decisão' }));
+  expect(await screen.findByRole('status')).toHaveTextContent('Aprovação confirmada nesta sessão.');
+  expect(revisaoService.revisar).toHaveBeenCalledWith(42, {
+    supervisorId: 1,
+    aprovado: true,
+    motivoReprovacao: '',
+  });
 });
 
 it('bloqueia aprovação sem evidência obrigatória, mas permite solicitar correção', async () => {

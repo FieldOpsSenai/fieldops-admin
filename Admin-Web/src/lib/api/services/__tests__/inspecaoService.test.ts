@@ -8,6 +8,19 @@ const request: InspecaoRequest = {
 };
 beforeEach(() => jest.resetAllMocks());
 
+it('distingue lista vazia da AWS e aplica o filtro de estado em listas preenchidas', async () => {
+  jest.mocked(apiClient.get)
+    .mockResolvedValueOnce({ data: [] })
+    .mockResolvedValueOnce({ data: [
+      { id: 1, descricao: 'Agendada', status: 'AGENDADA' },
+      { id: 2, descricao: 'Concluída', status: 'CONCLUIDA' },
+    ] });
+  await expect(inspecaoService.listarPagina({ page: 0, size: 1 }))
+    .resolves.toMatchObject({ content: [], totalElements: 0 });
+  await expect(inspecaoService.listarPagina({ page: 0, size: 1, status: 'COMPLETED' }))
+    .resolves.toMatchObject({ content: [{ id: 2, status: 'COMPLETED' }], totalElements: 1 });
+});
+
 it('localiza detalhes além da primeira página e preserva conclusão sem inferir aprovação', async () => {
   jest.mocked(apiClient.get)
     .mockResolvedValueOnce({ data: { content: [], number: 0, totalPages: 2, totalElements: 101, size: 100 } })
@@ -15,6 +28,19 @@ it('localiza detalhes além da primeira página e preserva conclusão sem inferi
   const result = await inspecaoService.buscarPorId(77);
   expect(result).toMatchObject({ id: 77, status: 'COMPLETED', templateId: 3, templateVersion: 2 });
   expect(apiClient.get).toHaveBeenCalledTimes(2);
+});
+
+it('completa cliente e local pelos vínculos do equipamento quando a listagem antiga omite os nomes', async () => {
+  jest.mocked(apiClient.get)
+    .mockResolvedValueOnce({ data: [{ id: 77, descricao: 'Inspeção', status: 'PENDENTE', equipamentoId: 4 }] })
+    .mockResolvedValueOnce({ data: [{ id: 4, nome: 'Portão', localId: 6 }] })
+    .mockResolvedValueOnce({ data: [{ id: 6, nome: 'Pátio', clienteId: 8, clienteNome: 'Horizonte' }] });
+
+  await expect(inspecaoService.buscarPorId(77)).resolves.toMatchObject({
+    equipmentName: 'Portão',
+    siteName: 'Pátio',
+    clientName: 'Horizonte',
+  });
 });
 
 it('informa inspeção inexistente e rejeita identificador inválido antes da consulta', async () => {

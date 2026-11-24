@@ -21,6 +21,7 @@ type Detail = {
   answers: InspectionAnswer[];
   evidence: InspectionEvidence[];
   failures: string[];
+  reviewUnavailable: boolean;
 };
 type Receipt = { approved: boolean; reason: string };
 
@@ -28,6 +29,10 @@ function dateLabel(value?: string) {
   if (!value) return 'Não informado';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString('pt-BR');
+}
+
+function isMissingReviewRoute(message: string) {
+  return /^No static resource \/?api\/v1\/inspecoes\/\d+\/(snapshot|respostas)\.?$/i.test(message.trim());
 }
 
 function answerLabel(answer: InspectionAnswer | undefined, type: string) {
@@ -89,14 +94,15 @@ export default function InspectionDetailPage({ id }: { id: number }) {
         ]);
         if (controller.signal.aborted) return;
         const failures: string[] = [];
-        if (snapshot.status === 'rejected')
-          failures.push(
-            getApiErrorMessage(snapshot.reason, 'Não foi possível carregar o checklist.'),
-          );
-        if (answers.status === 'rejected')
-          failures.push(
-            `Respostas indisponíveis: ${getApiErrorMessage(answers.reason, 'verifique sua permissão e tente novamente.')}`,
-          );
+        const snapshotError = snapshot.status === 'rejected'
+          ? getApiErrorMessage(snapshot.reason, 'Não foi possível carregar o checklist.')
+          : '';
+        const answersError = answers.status === 'rejected'
+          ? getApiErrorMessage(answers.reason, 'verifique sua permissão e tente novamente.')
+          : '';
+        const reviewUnavailable = isMissingReviewRoute(snapshotError) || isMissingReviewRoute(answersError);
+        if (snapshotError && !isMissingReviewRoute(snapshotError)) failures.push(snapshotError);
+        if (answersError && !isMissingReviewRoute(answersError)) failures.push(`Respostas indisponíveis: ${answersError}`);
         if (evidence.status === 'rejected')
           failures.push(
             getApiErrorMessage(evidence.reason, 'Não foi possível carregar as evidências.'),
@@ -107,6 +113,7 @@ export default function InspectionDetailPage({ id }: { id: number }) {
           answers: answers.status === 'fulfilled' ? answers.value : [],
           evidence: evidence.status === 'fulfilled' ? evidence.value : [],
           failures,
+          reviewUnavailable,
         });
       } catch (failure) {
         if (!controller.signal.aborted)
@@ -125,7 +132,7 @@ export default function InspectionDetailPage({ id }: { id: number }) {
 
   const inspection = detail?.inspection;
   const canReview = canReviewInspections(session?.profile);
-  const dataReady = !!detail && !detail.failures.length && detail.snapshot.length > 0;
+  const dataReady = !!detail && !detail.reviewUnavailable && !detail.failures.length && detail.snapshot.length > 0;
   const missingRequired = detail?.snapshot.some(
     (item) =>
       (item.obrigatorio &&
@@ -304,10 +311,18 @@ export default function InspectionDetailPage({ id }: { id: number }) {
               <h2 id="checklist-title" className="text-xl font-bold">
                 Checklist e respostas
               </h2>
-              <p className="text-sm text-slate-600">
-                Estrutura preservada no agendamento da inspeção.
-              </p>
-              {!detail.snapshot.length && !detail.failures.length && (
+              {detail.reviewUnavailable && (
+                <p role="status" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">
+                  A versão da API deste ambiente não disponibiliza a consulta completa do checklist e das respostas.
+                  A revisão fica indisponível até a atualização da API.
+                </p>
+              )}
+              {!!detail.snapshot.length && (
+                <p className="text-sm text-slate-600">
+                  Estrutura preservada no agendamento da inspeção.
+                </p>
+              )}
+              {!detail.snapshot.length && !detail.failures.length && !detail.reviewUnavailable && (
                 <p className="rounded-lg border bg-white p-4">
                   Nenhum item de checklist foi retornado. A revisão está bloqueada.
                 </p>
@@ -337,7 +352,7 @@ export default function InspectionDetailPage({ id }: { id: number }) {
                           </p>
                           <p className="whitespace-pre-wrap break-words">
                             <strong>Resposta: </strong>
-                            {detail.failures.length
+                            {detail.failures.length || detail.reviewUnavailable
                               ? answer
                                 ? answerLabel(answer, item.tipoResposta)
                                 : 'Não disponível nesta consulta'
@@ -379,7 +394,7 @@ export default function InspectionDetailPage({ id }: { id: number }) {
             </section>
             <section aria-labelledby="review-title" className="rounded-xl border bg-white p-5">
               <h2 id="review-title" className="text-xl font-bold">
-                Revisão do supervisor
+                Revisão da inspeção
               </h2>
               <p className="mt-2 text-sm text-slate-600">
                 O estado “Concluída” informa o encerramento da execução. O histórico de decisões e
@@ -400,10 +415,10 @@ export default function InspectionDetailPage({ id }: { id: number }) {
               )}
               {!canReview && (
                 <p className="mt-4 text-sm">
-                  Entre com um perfil de supervisor para registrar uma decisão.
+                  Apenas administradores e supervisores podem registrar uma decisão.
                 </p>
               )}
-              {canReview && inspection.status !== 'COMPLETED' && !receipt && (
+              {canReview && inspection.status !== 'COMPLETED' && !receipt && !detail.reviewUnavailable && (
                 <p className="mt-4 text-sm">
                   A revisão estará disponível após o técnico concluir a execução.
                 </p>

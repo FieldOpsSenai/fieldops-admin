@@ -1,5 +1,5 @@
 import apiClient from '../axios';
-import { apiSearchTerm, mapApiPage, type ApiPage, type CadastroQuery } from './apiPage';
+import { apiSearchTerm, mapApiPage, matchesSearch, paginateList, type ApiPage, type CadastroQuery } from './apiPage';
 
 export interface LocalDTO {
   id: number;
@@ -19,10 +19,18 @@ export interface LocalRequest {
 export const localService = {
   async listarPagina(query: CadastroQuery, signal?: AbortSignal): Promise<ApiPage<LocalDTO>> {
     if (query.status === 'INACTIVE') throw new Error('A API não permite consultar locais inativos.');
-    const response = await apiClient.get<ApiPage<LocalDTO>>('/locais', {
+    const response = await apiClient.get<ApiPage<LocalDTO> | LocalDTO[]>('/locais', {
       params: { page: query.page ?? 0, size: query.size ?? 10, termo: apiSearchTerm(query.search), clienteId: query.clientId, sort: 'nome,asc' }, signal,
     });
-    return mapApiPage(response.data, (site) => site);
+    const { data } = response;
+    if (Array.isArray(data)) {
+      const sites = data.filter((site) =>
+        (query.status !== 'ACTIVE' || site.ativo) &&
+        (query.clientId === undefined || site.clienteId === query.clientId) &&
+        matchesSearch(query.search, site.nome, site.endereco));
+      return paginateList(sites.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')), query);
+    }
+    return mapApiPage(data, (site) => site);
   },
   async listarTodos(): Promise<LocalDTO[]> { return (await apiClient.get<LocalDTO[]>('/locais/todos')).data; },
   async listarPorCliente(clienteId: number): Promise<LocalDTO[]> { return (await apiClient.get<LocalDTO[]>(`/locais/cliente/${clienteId}`)).data; },

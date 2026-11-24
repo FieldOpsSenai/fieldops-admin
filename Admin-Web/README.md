@@ -80,6 +80,7 @@ O cliente HTTP envia o JWT no cabeçalho `Authorization: Bearer`. A rota `src/ap
 | Comando                | Ação                                          |
 | ---------------------- | --------------------------------------------- |
 | `npm run dev`          | Inicia o servidor de desenvolvimento.         |
+| `npm run dev:docker`   | Inicia uma instância separada em `http://127.0.0.1:3001`, apontando para a API local do Docker na porta 8080. |
 | `npm run build`        | Gera a versão de produção.                    |
 | `npm run start`        | Inicia a versão de produção já compilada.     |
 | `npm run lint`         | Executa o ESLint.                             |
@@ -149,4 +150,4 @@ Consulte [docs/CONTRIBUTING.md](../docs/CONTRIBUTING.md) para as regras completa
 
 ## Status
 
-Fluxo administrativo integrado à API Java: autenticação com cookies HttpOnly e guards por perfil, cadastros (usuários, clientes, locais, equipamentos com QR Code), construtor de modelos versionados, planejamento e acompanhamento de inspeções, e revisão com aprovação ou reprovação. Lint, TypeScript, testes Jest e build de produção passam. Limitações conhecidas estão em [docs/PENDENCIAS-API.md](docs/PENDENCIAS-API.md).
+Fluxo administrativo integrado à API Java: autenticação com cookies HttpOnly e guards por perfil, cadastros (usuários, clientes, locais, equipamentos com QR Code), construtor de modelos versionados, planejamento e acompanhamento de inspeções, e revisão com aprovação ou reprovação. Lint, TypeScript, testes Jest e build de produção passam.

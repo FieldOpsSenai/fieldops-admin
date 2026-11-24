@@ -23,6 +23,11 @@ describe('Hierarchy Services (Cliente, Local, Equipamento)', () => {
 
   describe('clienteService', () => {
     const client = { id: 1, nome: 'Empresa', cnpj: '12345678000100', telefone: '11999998888', email: 'empresa@test.com', ativo: true };
+    it('calcula o total de clientes ativos quando a AWS retorna um array', async () => {
+      jest.mocked(apiClient.get).mockResolvedValueOnce({ data: [client, { ...client, id: 2, ativo: false }] });
+      await expect(clienteService.listarPagina({ size: 1, status: 'ACTIVE' }))
+        .resolves.toMatchObject({ content: [client], totalElements: 1, totalPages: 1 });
+    });
     it('consulta páginas pelo contrato da API main', async () => {
       (apiClient.get as jest.Mock).mockResolvedValueOnce({ data: { content: [client], number: 0, size: 10, totalPages: 1, totalElements: 1 } });
       const page = await clienteService.listarPagina({ search: 'Empresa', page: 0, size: 10 });
@@ -62,6 +67,14 @@ describe('Hierarchy Services (Cliente, Local, Equipamento)', () => {
   });
   describe('equipamentoService', () => {
     const equipment = { id: 100, nome: 'Compressor', numeroSerie: 'S-1', localId: 10, qrCode: 'QR-100', ativo: true };
+    it('filtra e pagina os equipamentos de uma lista simples', async () => {
+      const second = { ...equipment, id: 101, nome: 'Motor' };
+      jest.mocked(apiClient.get).mockResolvedValueOnce({ data: [
+        second, equipment, { ...equipment, id: 102, localId: 20 }, { ...equipment, id: 103, ativo: false },
+      ] });
+      await expect(equipamentoService.listarPagina({ page: 1, size: 1, siteId: 10, status: 'ACTIVE' }))
+        .resolves.toMatchObject({ content: [second], number: 1, totalElements: 2, totalPages: 2 });
+    });
     it('consulta equipamentos e QR pelo contrato atual', async () => {
       (apiClient.get as jest.Mock).mockResolvedValueOnce({ data: { content: [equipment], number: 0, size: 10, totalPages: 1, totalElements: 1 } }).mockResolvedValueOnce({ data: equipment });
       expect((await equipamentoService.listarPagina({ siteId: 10 })).content).toEqual([equipment]);

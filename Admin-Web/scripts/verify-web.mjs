@@ -247,11 +247,12 @@ try {
 
   profile = 'ADMINISTRADOR';
   await page.reload();
-  await page.getByText('Entre com um perfil de supervisor').waitFor();
-  assert.equal(await page.getByRole('button', { name: 'Revisar decisão' }).count(), 0);
+  await page.getByRole('radio', { name: 'Aprovar' }).waitFor();
+  await page.getByRole('radio', { name: 'Reprovar e solicitar correção' }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Revisar decisão' }).isEnabled(), true);
   assert.deepEqual(unexpected, []);
   assert.deepEqual(pageErrors, []);
-  results.push('Permissão visual de revisão; sem erros JavaScript ou endpoints inesperados.');
+  results.push('Administrador e supervisor têm acesso à revisão; sem erros JavaScript ou endpoints inesperados.');
   await writeFile(
     'test-results/browser-verification.json',
     JSON.stringify(

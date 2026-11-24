@@ -21,7 +21,7 @@ O proxy remove `/v1` somente para modelos. Os detalhes administrativos percorrem
 
 Estados existentes: `PENDENTE`, `AGENDADA`, `EM_ANDAMENTO`, `CONCLUIDA`, `CANCELADA`. A web não converte `CONCLUIDA` em aprovação: a conclusão pelo técnico também retorna esse estado.
 
-A revisão envia `{ supervisorId, aprovado, motivoReprovacao? }`. O ID vem da sessão, sem seletor de outra pessoa. O contrato atual exige supervisor. A reprovação exige motivo de até 255 caracteres, compatível com a coluna atual. Após confirmação, o estado é reconsultado antes do envio; controle definitivo de concorrência pertence à API.
+A web oferece as mesmas opções de revisão para administradores e supervisores. A solicitação envia `{ supervisorId, aprovado, motivoReprovacao? }`, com o ID do gestor autenticado no campo legado `supervisorId`. Para o fluxo funcionar, a API precisa permitir a leitura das respostas e aceitar decisões dos dois perfis. A reprovação exige motivo de até 255 caracteres, compatível com a coluna atual. Após a confirmação, a web reconsulta o estado. O controle definitivo de concorrência pertence à API.
 
 Aprovação espera `CONCLUIDA`; reprovação espera `EM_ANDAMENTO`. Só há sucesso visual após retorno compatível. Falhas preservam a justificativa. A confirmação na página é temporária, não um histórico persistente.
 
