@@ -15,7 +15,10 @@ async function proxyToApi(
   }
   if (path[0] === 'auth') return Response.json({ message: 'Use a sessão da interface web.' }, { status: 404 });
   const endpoint = path.map(encodeURIComponent).join('/');
-  const targetUrl = `${apiBaseUrl}/${endpoint}${request.nextUrl.search}`;
+  // Modelos da API principal estão em /api/modelos-inspecao; os demais
+  // recursos administrativos permanecem em /api/v1.
+  const base = path[0] === 'modelos-inspecao' ? apiBaseUrl.replace(/\/v1$/, '') : apiBaseUrl;
+  const targetUrl = `${base}/${endpoint}${request.nextUrl.search}`;
   const headers = new Headers();
 
   for (const name of ['accept', 'content-type']) {

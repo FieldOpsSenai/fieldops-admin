@@ -1,237 +1,84 @@
 import apiClient from '../axios';
-import { getPageContent } from './apiPage';
-import type { ResponseType, Template, TemplateItem, TemplateSection } from '@/types';
+import { apiSearchTerm, collectPages, type ApiPage } from './apiPage';
 import { validateTemplateItems } from '@/lib/templates/validation';
+import type { ResponseType, Template, TemplateItem, TemplateSection } from '@/types';
 
-export interface ModeloInspecaoPublicado {
-  versaoId: number;
-  modeloId: number;
-  titulo: string;
-  categoria: string;
-  versao: number;
+export interface ModeloInspecaoPublicado { versaoId: number; modeloId: number; titulo: string; categoria: string; versao: number }
+interface ApiItem { id: number; descricao: string; tipoResposta: string; ordem: number; obrigatorio: boolean; critico: boolean; evidenciaObrigatoria?: boolean }
+interface ApiSection { id: number; titulo: string; ordem: number; itens: ApiItem[] }
+interface ApiModel { id: number; titulo: string; categoria: string; versao: number; status: 'RASCUNHO' | 'PUBLICADO'; dataCriacao: string; secoes: ApiSection[] }
+type DraftData = { title: string; description: string; category: string; sections: TemplateSection[] };
+type MappedModel = Template & { description: string; category: string };
+const base = '/modelos-inspecao';
+
+function responseType(value: string): ResponseType {
+  const types: Record<string, ResponseType> = { TEXT: 'TEXT', TEXTO: 'TEXT', TEXT_SHORT: 'TEXT', LONG_TEXT: 'LONG_TEXT', TEXT_LONG: 'LONG_TEXT', NUMERIC: 'NUMERIC', NUMBER: 'NUMERIC', NUMERO: 'NUMERIC', DATE: 'DATE', DATA: 'DATE', BOOLEAN: 'YES_NO', CONFORMITY: 'BOOLEAN', YES_NO: 'YES_NO' };
+  const mapped = types[value.toUpperCase()];
+  if (!mapped) throw new Error(`Tipo de resposta não reconhecido pela interface: ${value}.`);
+  return mapped;
 }
-
-interface TemplateSummary {
-  id: number;
-  title: string;
-  category: string;
-  version: number;
-  status: 'ACTIVE' | 'DRAFT' | 'INACTIVE';
+function mapItem(item: ApiItem): TemplateItem {
+  return { id: String(item.id), label: item.descricao, responseType: responseType(item.tipoResposta), required: item.obrigatorio,
+    critical: item.critico, allowObservation: false, requireEvidenceOnNonConformity: item.evidenciaObrigatoria ?? false, order: item.ordem };
 }
-
-interface TemplateVersion {
-  id: number;
-  versionNumber: number;
-  publishedAt?: string;
-  publishedBy?: number;
+function mapModel(model: ApiModel): MappedModel {
+  return { id: String(model.id), title: model.titulo, description: '', category: model.categoria, version: model.versao,
+    status: model.status, createdAt: model.dataCriacao, updatedAt: '', sections: [...(model.secoes ?? [])].sort((a, b) => a.ordem - b.ordem).map((section) => ({
+      id: String(section.id), title: section.titulo, order: section.ordem,
+      items: [...(section.itens ?? [])].sort((a, b) => a.ordem - b.ordem).map(mapItem),
+    })) };
 }
-
-interface ApiTemplateItem {
-  id: number;
-  title: string;
-  description?: string;
-  responseType: string;
-  required: boolean;
-  observationRequiredOnFailure: boolean;
-  evidenceRequiredOnFailure: boolean;
-  optionsJson?: string[];
-  displayOrder: number;
+function itemPayload(item: TemplateItem, index: number) {
+  return { descricao: item.label.trim(), tipoResposta: item.responseType === 'YES_NO' ? 'BOOLEAN' : item.responseType === 'BOOLEAN' ? 'CONFORMITY' : item.responseType, ordem: index + 1, obrigatorio: item.required,
+    critico: item.critical ?? false, evidenciaObrigatoria: item.requireEvidenceOnNonConformity };
 }
-
-interface ApiTemplateSection {
-  id: number;
-  title: string;
-  description?: string;
-  displayOrder: number;
-  items: ApiTemplateItem[];
+function validate(data: DraftData) {
+  if (data.description.trim()) throw new Error('A API atual não permite salvar descrição do modelo.');
+  const errors = validateTemplateItems(data.sections);
+  if (errors.length) throw new Error(errors.join(' '));
+  for (const section of data.sections) {
+    if (!section.title.trim()) throw new Error('Cada seção precisa ter um nome.');
+    for (const item of section.items) {
+      if (item.responseType === 'SINGLE_SELECT' || item.responseType === 'MULTI_SELECT') throw new Error('A API atual não permite salvar opções de seleção.');
+      if (item.allowObservation) throw new Error('A API atual não permite configurar observação obrigatória.');
+    }
+  }
 }
-
-interface ApiTemplateDetail extends TemplateSummary {
-  description?: string;
-  status: 'ACTIVE' | 'DRAFT' | 'INACTIVE';
-  currentVersion?: number;
-  createdAt: string;
-  updatedAt: string;
-  sections: ApiTemplateSection[];
-}
-
-function mapResponseType(value: string): ResponseType {
-  if (value === 'TEXT_LONG') return 'LONG_TEXT';
-  if (value === 'BOOLEAN') return 'YES_NO';
-  if (value === 'NUMBER') return 'NUMERIC';
-  if (value === 'SINGLE_CHOICE') return 'SINGLE_SELECT';
-  if (value === 'CONFORMITY') return 'BOOLEAN';
-  if (value === 'DATE') return 'DATE';
-  return 'TEXT';
-}
-
-function toApiResponseType(value: ResponseType): string {
-  if (value === 'LONG_TEXT') return 'TEXT_LONG';
-  if (value === 'YES_NO') return 'BOOLEAN';
-  if (value === 'NUMERIC') return 'NUMBER';
-  if (value === 'SINGLE_SELECT') return 'SINGLE_CHOICE';
-  if (value === 'BOOLEAN') return 'CONFORMITY';
-  if (value === 'DATE') return 'DATE';
-  return 'TEXT_SHORT';
-}
-
-function mapTemplateItem(item: ApiTemplateItem): TemplateItem {
-  return {
-    id: String(item.id),
-    label: item.title,
-    responseType: mapResponseType(item.responseType),
-    options: item.optionsJson?.map((label, index) => ({ id: `${item.id}-${index + 1}`, label, order: index + 1 })),
-    required: item.required,
-    allowObservation: item.observationRequiredOnFailure,
-    requireEvidenceOnNonConformity: item.evidenceRequiredOnFailure,
-    order: item.displayOrder,
-  };
-}
-
-function mapTemplate(template: ApiTemplateDetail, version?: TemplateVersion): Template & { description: string; category: string } {
-  return {
-    id: String(template.id),
-    title: template.title,
-    description: template.description ?? '',
-    category: template.category,
-    status: template.status === 'ACTIVE' ? 'PUBLICADO' : 'RASCUNHO',
-    version: template.currentVersion ?? template.version,
-    createdAt: template.createdAt,
-    updatedAt: template.updatedAt,
-    publishedAt: version?.publishedAt,
-    publishedBy: version?.publishedBy ? `Usuário #${version.publishedBy}` : undefined,
-    sections: [...template.sections].sort((a, b) => a.displayOrder - b.displayOrder).map((section): TemplateSection => ({
-      id: String(section.id),
-      title: section.title,
-      order: section.displayOrder,
-      items: [...section.items].sort((a, b) => a.displayOrder - b.displayOrder).map(mapTemplateItem),
-    })),
-  };
-}
-
 export const modeloInspecaoService = {
-  async criarRascunho(data: { title: string; description: string; category: string }) {
-    const response = await apiClient.post<ApiTemplateDetail>('/inspection-templates', data);
-    return mapTemplate(response.data);
+  async criarRascunho(data: { title: string; description: string; category: string }): Promise<MappedModel> {
+    if (data.description.trim()) throw new Error('A API atual não permite salvar descrição do modelo.');
+    return mapModel((await apiClient.post<ApiModel>(base, { titulo: data.title, categoria: data.category })).data);
   },
-
-  async buscarPorId(id: string) {
-    const response = await apiClient.get<ApiTemplateDetail>(`/inspection-templates/${id}`);
-    return mapTemplate(response.data);
+  async buscarPorId(id: string): Promise<MappedModel> { return mapModel((await apiClient.get<ApiModel>(`${base}/${id}`)).data); },
+  async salvarRascunho(id: string, data: DraftData): Promise<MappedModel> {
+    validate(data);
+    const current = (await apiClient.get<ApiModel>(`${base}/${id}`)).data;
+    if (current.status !== 'RASCUNHO') throw new Error('Versões publicadas são imutáveis.');
+    // O PUT da API aceita a árvore completa e a salva na mesma transação.
+    // IDs de seções/itens do rascunho são substituídos; snapshots publicados
+    // continuam imutáveis. Não há sequência de escritas parcialmente confirmadas.
+    const response = await apiClient.put<ApiModel>(`${base}/${id}`, {
+      titulo: data.title.trim(), categoria: data.category,
+      secoes: data.sections.map((section, index) => ({
+        titulo: section.title.trim(), ordem: index + 1,
+        itens: section.items.map(itemPayload),
+      })),
+    });
+    return mapModel(response.data);
   },
-
-  // Successful creates replace temporary IDs in this working copy. Keep it on a
-  // failed save so retrying does not duplicate confirmed sections or items.
-  async salvarRascunho(
-    id: string,
-    data: { title: string; description: string; category: string; sections: TemplateSection[] },
-  ) {
-    const base = `/inspection-templates/${id}`;
-    const current = (await apiClient.get<ApiTemplateDetail>(base)).data;
-    if (current.status !== 'DRAFT') throw new Error('Versões publicadas são imutáveis.');
-    const errors = validateTemplateItems(data.sections);
-    if (errors.length) throw new Error(errors.join(' '));
-    for (const section of data.sections) {
-      if (!section.title.trim() || section.title.trim().length > 200) {
-        throw new Error('Cada seção deve ter um nome com até 200 caracteres.');
-      }
-      const previous = current.sections.find((entry) => String(entry.id) === section.id);
-      if (previous?.items.some((item) => !section.items.some((entry) => entry.id === String(item.id)))) {
-        throw new Error('A exclusão de itens já salvos ainda não está disponível. Você pode remover a seção inteira.');
-      }
-      for (const item of section.items) {
-        if (item.responseType === 'MULTI_SELECT') throw new Error('Seleção múltipla ainda não está disponível.');
-      }
-    }
-    await apiClient.put(base, { title: data.title, description: data.description, category: data.category });
-    for (const [index, section] of data.sections.entries()) {
-      const previous = current.sections.find((entry) => String(entry.id) === section.id);
-      const payload = { title: section.title, description: previous?.description, displayOrder: index + 1 };
-      if (previous) {
-        await apiClient.put(`${base}/sections/${section.id}`, payload);
-      } else {
-        const created = await apiClient.post<ApiTemplateSection>(`${base}/sections`, payload);
-        section.id = String(created.data.id);
-      }
-      for (const [itemIndex, item] of section.items.entries()) {
-        const oldItem = previous?.items.find((entry) => String(entry.id) === item.id);
-        const payload = {
-          title: item.label,
-          description: oldItem?.description,
-          responseType: toApiResponseType(item.responseType),
-          required: item.required,
-          observationRequiredOnFailure: item.allowObservation,
-          evidenceRequiredOnFailure: item.requireEvidenceOnNonConformity,
-          optionsJson: item.responseType === 'SINGLE_SELECT' ? item.options?.map((option) => option.label.trim()) ?? [] : [],
-          displayOrder: itemIndex + 1,
-        };
-        const path = `${base}/sections/${section.id}/items`;
-        if (oldItem) await apiClient.put(`${path}/${item.id}`, payload);
-        else {
-          const created = await apiClient.post<ApiTemplateItem>(path, payload);
-          item.id = String(created.data.id);
-        }
-      }
-    }
-    // Remove sections only after all requested additions/updates succeeded.
-    for (const section of current.sections) {
-      if (!data.sections.some((entry) => entry.id === String(section.id))) {
-        await apiClient.delete(`${base}/sections/${section.id}`);
-      }
-    }
-    return this.buscarPorId(id);
+  async excluir(id: string): Promise<void> { await apiClient.delete(`${base}/${id}`); },
+  async publicar(id: string): Promise<MappedModel> { return mapModel((await apiClient.patch<ApiModel>(`${base}/${id}/publicar`)).data); },
+  async novaVersao(id: string): Promise<MappedModel> { return mapModel((await apiClient.post<ApiModel>(`${base}/${id}/nova-versao`)).data); },
+  async listarTodos(): Promise<MappedModel[]> {
+    const params = { size: 100, termo: apiSearchTerm() };
+    const { data } = await apiClient.get<ApiPage<ApiModel> | ApiModel[]>(base, { params: { ...params, page: 0 } });
+    if (Array.isArray(data)) return data.map(mapModel);
+    const models = await collectPages(async (page) =>
+      page === 0 ? data : (await apiClient.get<ApiPage<ApiModel>>(base, { params: { ...params, page } })).data);
+    return models.map(mapModel);
   },
-
-  async publicar(id: string) {
-    const version = await apiClient.post<TemplateVersion>(`/inspection-templates/${id}/publish`);
-    const detail = await apiClient.get<ApiTemplateDetail>(`/inspection-templates/${id}`);
-    return mapTemplate(detail.data, version.data);
-  },
-
-  async listarTodos(): Promise<Array<Template & { description: string; category: string }>> {
-    const response = await apiClient.get<TemplateSummary[] | { content?: TemplateSummary[] }>(
-      '/inspection-templates',
-      { params: { page: 0, size: 200 } },
-    );
-    const summaries = getPageContent(response.data).filter((template) => template.status !== 'INACTIVE');
-    return Promise.all(summaries.map(async (summary) => {
-      const [detailResponse, versionsResponse] = await Promise.all([
-        apiClient.get<ApiTemplateDetail>(`/inspection-templates/${summary.id}`),
-        apiClient.get<TemplateVersion[]>(`/inspection-templates/${summary.id}/versions`),
-      ]);
-      const latestVersion = [...versionsResponse.data].sort((a, b) => b.versionNumber - a.versionNumber)[0];
-      return mapTemplate(detailResponse.data, latestVersion);
-    }));
-  },
-
   async listarPublicados(): Promise<ModeloInspecaoPublicado[]> {
-    const response = await apiClient.get<TemplateSummary[] | { content?: TemplateSummary[] }>(
-      '/inspection-templates',
-      { params: { status: 'ACTIVE', page: 0, size: 200 } },
-    );
-
-    const templates = getPageContent(response.data);
-    const versions = await Promise.all(
-      templates.map(async (template) => {
-        const versionResponse = await apiClient.get<TemplateVersion[]>(
-          `/inspection-templates/${template.id}/versions`,
-        );
-        const latest = [...versionResponse.data].sort(
-          (left, right) => right.versionNumber - left.versionNumber,
-        )[0];
-
-        return latest
-          ? {
-              versaoId: latest.id,
-              modeloId: template.id,
-              titulo: template.title,
-              categoria: template.category,
-              versao: latest.versionNumber,
-            }
-          : null;
-      }),
-    );
-
-    return versions.filter((version): version is ModeloInspecaoPublicado => version !== null);
+    const models = (await apiClient.get<ApiModel[]>(`${base}/publicados`)).data;
+    return models.filter((model) => model.status === 'PUBLICADO').map((model) => ({ versaoId: model.id, modeloId: model.id, titulo: model.titulo, categoria: model.categoria, versao: model.versao }));
   },
 };

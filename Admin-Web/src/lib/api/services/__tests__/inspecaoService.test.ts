@@ -1,0 +1,102 @@
+import apiClient from '../../axios';
+import { inspecaoService, type InspecaoRequest } from '../inspecaoService';
+
+jest.mock('../../axios', () => ({ __esModule: true, default: { get: jest.fn(), post: jest.fn(), patch: jest.fn() } }));
+const request: InspecaoRequest = {
+  descricao: 'Inspeção de teste', clienteId: 1, localId: 2, equipamentoId: 3, usuarioId: 4,
+  templateVersionId: 89, dataAgendada: '2030-01-02T14:30:00', dataLimite: '2030-01-03T14:30:00', prioridade: 'HIGH', observacoes: 'Verificar pressão',
+};
+beforeEach(() => jest.resetAllMocks());
+
+it('distingue lista vazia da AWS e aplica o filtro de estado em listas preenchidas', async () => {
+  jest.mocked(apiClient.get)
+    .mockResolvedValueOnce({ data: [] })
+    .mockResolvedValueOnce({ data: [
+      { id: 1, descricao: 'Agendada', status: 'AGENDADA' },
+      { id: 2, descricao: 'Concluída', status: 'CONCLUIDA' },
+    ] });
+  await expect(inspecaoService.listarPagina({ page: 0, size: 1 }))
+    .resolves.toMatchObject({ content: [], totalElements: 0 });
+  await expect(inspecaoService.listarPagina({ page: 0, size: 1, status: 'COMPLETED' }))
+    .resolves.toMatchObject({ content: [{ id: 2, status: 'COMPLETED' }], totalElements: 1 });
+});
+
+it('localiza detalhes além da primeira página e preserva conclusão sem inferir aprovação', async () => {
+  jest.mocked(apiClient.get)
+    .mockResolvedValueOnce({ data: { content: [], number: 0, totalPages: 2, totalElements: 101, size: 100 } })
+    .mockResolvedValueOnce({ data: { content: [{ id: 77, descricao: 'Inspeção', status: 'CONCLUIDA', dataAgendada: '2030-01-01', modeloId: 3, modeloVersao: 2 }], number: 1, totalPages: 2, totalElements: 101, size: 100 } });
+  const result = await inspecaoService.buscarPorId(77);
+  expect(result).toMatchObject({ id: 77, status: 'COMPLETED', templateId: 3, templateVersion: 2 });
+  expect(apiClient.get).toHaveBeenCalledTimes(2);
+});
+
+it('completa cliente e local pelos vínculos do equipamento quando a listagem antiga omite os nomes', async () => {
+  jest.mocked(apiClient.get)
+    .mockResolvedValueOnce({ data: [{ id: 77, descricao: 'Inspeção', status: 'PENDENTE', equipamentoId: 4 }] })
+    .mockResolvedValueOnce({ data: [{ id: 4, nome: 'Portão', localId: 6 }] })
+    .mockResolvedValueOnce({ data: [{ id: 6, nome: 'Pátio', clienteId: 8, clienteNome: 'Horizonte' }] });
+
+  await expect(inspecaoService.buscarPorId(77)).resolves.toMatchObject({
+    equipmentName: 'Portão',
+    siteName: 'Pátio',
+    clientName: 'Horizonte',
+  });
+});
+
+it('informa inspeção inexistente e rejeita identificador inválido antes da consulta', async () => {
+  await expect(inspecaoService.buscarPorId(-1)).rejects.toThrow('inválido');
+  expect(apiClient.get).not.toHaveBeenCalled();
+  jest.mocked(apiClient.get).mockResolvedValue({ data: { content: [], number: 0, totalPages: 0, totalElements: 0, size: 100 } });
+  await expect(inspecaoService.buscarPorId(77)).rejects.toThrow('não encontrada');
+});
+
+it('schedules using the selected version ID and the ID confirmed by the API', async () => {
+  jest.mocked(apiClient.post).mockResolvedValue({ data: { id: 77, descricao: request.descricao, status: 'AGENDADA' } });
+  const result = await inspecaoService.criar(request);
+  expect(apiClient.post).toHaveBeenCalledWith('/inspecoes', {
+    descricao: request.descricao, modeloId: 89, clienteId: 1, localId: 2, equipamentoId: 3, usuarioId: 4,
+    prioridade: 'ALTA', dataAgendada: '2030-01-02T14:30:00', dataLimite: '2030-01-03T14:30:00', instrucoes: 'Verificar pressão',
+  });
+  expect(result.id).toBe(77);
+});
+
+it('does not schedule without a published version', async () => {
+  await expect(inspecaoService.criar({ ...request, templateVersionId: undefined })).rejects.toThrow('versão publicada');
+  expect(apiClient.post).not.toHaveBeenCalled();
+});
+
+it.each([
+  [{ dataAgendada: '2000-01-01T12:00:00' }, 'data agendada futura'],
+  [{ dataAgendada: 'inválida' }, 'data agendada futura'],
+  [{ dataLimite: '2030-01-01T12:00:00' }, 'igual ou posterior'],
+  [{ descricao: ' ' }, 'título'],
+  [{ observacoes: 'a'.repeat(2001) }, 'instruções'],
+])('rejects invalid scheduling information before contacting the API', async (changes, message) => {
+  await expect(inspecaoService.criar({ ...request, ...changes })).rejects.toThrow(message);
+  expect(apiClient.post).not.toHaveBeenCalled();
+});
+
+it('sends the trimmed cancellation reason and returns the inspection from the API', async () => {
+  const result = { id: 77, status: 'CANCELADA' };
+  jest.mocked(apiClient.patch).mockResolvedValue({ data: result });
+  await expect(inspecaoService.cancelar(77, ' Cliente solicitou cancelamento ')).resolves.toEqual(result);
+  expect(apiClient.patch).toHaveBeenCalledWith('/inspecoes/77/cancelar', { motivo: 'Cliente solicitou cancelamento' });
+});
+
+it('rejects cancellation without a reason', async () => {
+  await expect(inspecaoService.cancelar(77, '  ')).rejects.toThrow('motivo');
+  expect(apiClient.patch).not.toHaveBeenCalled();
+});
+
+it('consulta paginação e filtros de inspeção usando o contrato da API main', async () => {
+  jest.mocked(apiClient.get).mockResolvedValue({ data: { content: [{ id: 7, descricao: 'Inspeção', status: 'AGENDADA', dataAgendada: '2030-01-01T12:00:00', clienteNome: 'Cliente', usuarioNome: 'Técnico', prioridade: 'URGENTE' }], number: 0, size: 10, totalPages: 1, totalElements: 1 } });
+  const result = await inspecaoService.listarPagina({ page: 0, size: 10, status: 'ASSIGNED', clientName: '2', technicianName: '3', priority: 'CRITICAL' });
+  expect(apiClient.get).toHaveBeenCalledWith('/inspecoes', { params: { page: 0, size: 10, termo: '%', status: 'AGENDADA', usuarioId: 3, clienteId: 2, prioridade: 'URGENTE' }, signal: undefined });
+  expect(result.content[0]).toMatchObject({ id: 7, title: 'Inspeção', status: 'ASSIGNED', clientName: 'Cliente', priority: 'CRITICAL' });
+});
+
+it('atualiza planejamento nos campos e rota esperados pela API main', async () => {
+  jest.mocked(apiClient.patch).mockResolvedValue({ data: { id: 77 } });
+  await inspecaoService.atualizarPlanejamento(77, { priority: 'CRITICAL', dueDate: '2031-02-01T15:30', instructions: ' Usar EPIs ' });
+  expect(apiClient.patch).toHaveBeenCalledWith('/inspecoes/77/planejamento', { prioridade: 'URGENTE', dataLimite: '2031-02-01T15:30', instrucoes: 'Usar EPIs' });
+});

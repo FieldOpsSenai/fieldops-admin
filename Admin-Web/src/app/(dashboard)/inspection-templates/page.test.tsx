@@ -7,7 +7,7 @@ beforeAll(() => { global.structuredClone = (value) => deserialize(serialize(valu
 
 jest.mock('@/components/layout/TopHeader', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/lib/api/services', () => ({ modeloInspecaoService: {
-  listarTodos: jest.fn(), criarRascunho: jest.fn(), salvarRascunho: jest.fn(), publicar: jest.fn(),
+  listarTodos: jest.fn(), criarRascunho: jest.fn(), salvarRascunho: jest.fn(), publicar: jest.fn(), excluir: jest.fn(), novaVersao: jest.fn(),
 } }));
 const template = {
   id: '1', title: 'Modelo salvo', description: '', category: 'Mecânica & Fluidos', status: 'RASCUNHO',
@@ -84,12 +84,67 @@ it('saves independent required, observation and evidence rules on the selected i
   render(<TemplatesPage />);
   fireEvent.click(await screen.findByTitle('Editar rascunho'));
   fireEvent.click(screen.getByLabelText('Resposta obrigatória'));
-  fireEvent.click(screen.getByLabelText('Exigir observação em não conformidade'));
-  fireEvent.click(screen.getByLabelText('Exigir evidência em não conformidade'));
+  fireEvent.click(screen.getByLabelText('Exigir evidência'));
   fireEvent.click(screen.getByRole('button', { name: 'Salvar rascunho' }));
   await waitFor(() => expect(modeloInspecaoService.salvarRascunho).toHaveBeenCalledWith('1', expect.objectContaining({
     sections: [expect.objectContaining({ items: [expect.objectContaining({
-      id: '20', required: true, allowObservation: true, requireEvidenceOnNonConformity: true,
+      id: '20', required: true, allowObservation: false, requireEvidenceOnNonConformity: true,
     })] })],
   })));
+});
+
+it('previews unsaved changes and returns to the same editor without any writes', async () => {
+  render(<TemplatesPage />);
+  fireEvent.click(await screen.findByTitle('Editar rascunho'));
+  fireEvent.change(screen.getByLabelText('Título do modelo'), { target: { value: 'Alteração ainda não salva' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Prévia do checklist' }));
+  expect(screen.getByRole('dialog', { name: 'Prévia do modelo' })).toHaveTextContent('Alteração ainda não salva');
+  expect(screen.getByText(/Nenhum dado foi salvo ou publicado/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Voltar à edição' }));
+  expect(screen.getByLabelText('Título do modelo')).toHaveValue('Alteração ainda não salva');
+  expect(modeloInspecaoService.criarRascunho).not.toHaveBeenCalled();
+  expect(modeloInspecaoService.salvarRascunho).not.toHaveBeenCalled();
+  expect(modeloInspecaoService.publicar).not.toHaveBeenCalled();
+});
+
+it('shows publication history and prevents direct editing of published models', async () => {
+  jest.mocked(modeloInspecaoService.listarTodos).mockResolvedValue([{
+    ...template, status: 'PUBLICADO', version: 2, publishedVersions: [
+      { id: 7, versionNumber: 1, publishedBy: 4, publishedAt: '2026-11-06T12:00:00Z' },
+      { id: 8, versionNumber: 2, publishedBy: 5, publishedAt: '2026-11-07T12:00:00Z' },
+    ],
+  }] as never);
+  render(<TemplatesPage />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Visualizar' }));
+  expect(screen.getByRole('region', { name: 'Versões publicadas' })).toHaveTextContent('v2 · ID 8');
+  expect(screen.getByRole('region', { name: 'Versões publicadas' })).toHaveTextContent('Usuário #4');
+  expect(screen.queryByRole('button', { name: 'Editar rascunho' })).not.toBeInTheDocument();
+});
+
+it('creates the next draft version through the API and keeps the published model', async () => {
+  const published = { ...template, status: 'PUBLICADO', version: 1 };
+  const next = { ...template, id: '2', version: 2, category: 'Categoria existente', status: 'RASCUNHO' };
+  jest.mocked(modeloInspecaoService.listarTodos).mockResolvedValue([published] as never);
+  jest.mocked(modeloInspecaoService.novaVersao).mockResolvedValue(next as never);
+  render(<TemplatesPage />);
+  fireEvent.click(await screen.findByTitle('Criar nova versão'));
+  await waitFor(() => expect(modeloInspecaoService.novaVersao).toHaveBeenCalledWith('1'));
+  expect(await screen.findByText('Editar Rascunho: 2')).toBeInTheDocument();
+  expect(screen.getAllByRole('option', { name: 'Categoria existente' }).some((option) => (option as HTMLOptionElement).selected)).toBe(true);
+  expect(screen.getAllByRole('heading', { name: 'Modelo salvo' })).toHaveLength(2);
+});
+
+it('preserva a regra de evidência da origem ao salvar uma nova versão', async () => {
+  const sections = [{ id: '10', title: 'Motor', order: 1, items: [{ id: '20', label: 'Sem vazamento?', responseType: 'BOOLEAN', order: 1, required: true, critical: true, allowObservation: false, requireEvidenceOnNonConformity: true }] }];
+  const published = { ...template, status: 'PUBLICADO', sections };
+  const next = { ...template, id: '2', version: 2, sections: [{ ...sections[0], id: '30', items: [{ ...sections[0].items[0], id: '40', requireEvidenceOnNonConformity: false }] }] };
+  jest.mocked(modeloInspecaoService.listarTodos).mockResolvedValue([published] as never);
+  jest.mocked(modeloInspecaoService.novaVersao).mockResolvedValue(next as never);
+  jest.mocked(modeloInspecaoService.salvarRascunho).mockResolvedValue(next as never);
+  render(<TemplatesPage />);
+  fireEvent.click(await screen.findByTitle('Criar nova versão'));
+  expect(await screen.findByLabelText('Exigir evidência')).toBeChecked();
+  expect(screen.getByLabelText('Item crítico')).toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: 'Salvar rascunho' }));
+  await waitFor(() => expect(modeloInspecaoService.salvarRascunho).toHaveBeenCalledWith('2', expect.objectContaining({ sections })));
 });

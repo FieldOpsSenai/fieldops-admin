@@ -23,9 +23,47 @@ export interface CadastroQuery {
   siteId?: number;
 }
 
+// A consulta JPQL da API main aplica LOWER a parâmetros nulos no PostgreSQL.
+// O curinga representa todos os nomes não nulos e evita o erro 500 na busca vazia.
+export function apiSearchTerm(value?: string): string {
+  return value?.trim() || '%';
+}
+
 export function mapApiPage<T, U>(page: ApiPage<T>, map: (item: T) => U): ApiPage<U> {
   if (!Array.isArray(page.content) || !Number.isFinite(page.totalElements) || !Number.isFinite(page.totalPages)) {
     throw new Error('A API não retornou os dados de paginação esperados.');
   }
   return { ...page, content: page.content.map(map) };
+}
+
+/** Adapta os endpoints que retornam a lista inteira em versões anteriores da API. */
+export function paginateList<T>(items: T[], { page = 0, size = 10 }: Pick<CadastroQuery, 'page' | 'size'>): ApiPage<T> {
+  const start = page * size;
+  return {
+    content: items.slice(start, start + size),
+    totalElements: items.length,
+    totalPages: Math.ceil(items.length / size),
+    number: page,
+    size,
+  };
+}
+
+export function matchesSearch(search: string | undefined, ...fields: (string | undefined)[]) {
+  const term = search?.trim().toLocaleLowerCase('pt-BR');
+  return !term || term === '%' || fields.some((field) => field?.toLocaleLowerCase('pt-BR').includes(term));
+}
+
+/** Reads paginated lookup options without silently truncating at the first page. */
+export async function collectPages<T>(fetchPage: (page: number) => Promise<ApiPage<T>>): Promise<T[]> {
+  const result: T[] = [];
+  let page = 0;
+  let pages = 1;
+  while (page < pages) {
+    const response = mapApiPage(await fetchPage(page), (item) => item);
+    if (response.number !== page) throw new Error('A API retornou uma página diferente da solicitada.');
+    result.push(...response.content);
+    pages = response.totalPages;
+    page += 1;
+  }
+  return result;
 }

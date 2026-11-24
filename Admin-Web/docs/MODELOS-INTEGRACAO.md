@@ -1,15 +1,21 @@
 # Modelos de inspeção — integração web
 
-O painel cria e edita rascunhos em `/inspection-templates`, incluindo seções e itens. Somente respostas confirmadas são apresentadas como sucesso. Versões publicadas são protegidas tanto na interface quanto pela verificação do estado antes de salvar.
+A API usa `/api/modelos-inspecao`, sem `/v1`. O proxy adapta o caminho mantendo os tokens em cookies HttpOnly.
 
-Ao copiar um modelo, o painel abre um formulário com IDs temporários. O novo rascunho só é criado ao salvar. Se parte do salvamento falhar, o formulário mantém o ID do modelo e os IDs de seções/itens já confirmados para reutilizá-los na próxima tentativa. As operações da API são individuais, portanto não há garantia de transação do checklist inteiro. Após uma falha, parte das alterações pode já estar persistida.
+Rascunhos, seções e itens podem ser criados, editados, ordenados e excluídos. A prévia usa os valores do editor e não escreve na API. A publicação valida a estrutura e aguarda confirmação; versões publicadas permanecem somente leitura.
 
-## Dependências do contrato
+## Salvamento
 
-O contrato disponível em `contracts/openapi.json` não oferece exclusão de modelos nem exclusão individual de itens. Esses critérios dos PBIs 018 e 020 permanecem pendentes da API. A interface informa a limitação e não simula exclusão local. Seções completas podem ser excluídas pela operação documentada.
+O PUT do modelo aceita título, categoria e a árvore completa de seções e itens em uma transação. A web usa essa operação para evitar várias escritas parciais. A resposta fornece os novos IDs dos itens do rascunho. Reenviar a árvore substitui a estrutura, sem acrescentar itens duplicados.
 
-Novos rascunhos podem ser copiados de modelos publicados. O contrato ainda não oferece reabertura de um modelo publicado para criar uma versão seguinte no mesmo ID. A cópia é um novo modelo e não deve ser apresentada como uma nova versão do modelo original.
+Em falha, o editor mantém os valores. A criação inicial é um POST separado: se a conexão cair sem resposta, confira a listagem antes de recriar. Idempotência definitiva depende da API.
 
-## Validação
+## Limites do contrato
 
-Testes automatizados cobrem edição persistida, falhas mantendo o formulário aberto, cópia sem criação antecipada, retentativa após falha parcial e rejeição de edição de modelos publicados. São testes com respostas simuladas; a homologação autenticada com o backend continua necessária.
+- Descrição geral, opções de seleção e observação obrigatória não são persistidas pela API; não são oferecidas como funcionais na web.
+- Evidência obrigatória vale independentemente do resultado.
+- A API não expõe histórico separado de publicação com data e responsável.
+- A cópia da nova versão no backend omite a regra de evidência. O editor preserva as regras da origem para salvar no novo rascunho.
+- Busca vazia usa `%` devido à falha da consulta atual com parâmetro nulo no PostgreSQL.
+
+Veja [dependências da API](PENDENCIAS-API.md) e [demonstração](DEMONSTRACAO.md).

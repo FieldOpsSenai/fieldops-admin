@@ -29,3 +29,15 @@ it('preserva cookies diante de falha transitória da API', async () => {
   expect(response.status).toBe(503);
   expect(response.cookies.get('fieldops_refresh')).toBeUndefined();
 });
+
+it('renova sessão e troca o refresh token usando o contrato da API main', async () => {
+  const claims = Buffer.from(JSON.stringify({ id: 42, exp: Math.floor(Date.now() / 1000) + 600 })).toString('base64url');
+  const token = `header.${claims}.signature`;
+  fetchMock.mockResolvedValueOnce(Response.json({ token, refreshToken: 'rotated', expiracao: 86400 }))
+    .mockResolvedValueOnce(Response.json({ nome: 'Supervisor', email: 'supervisor@example.com', perfil: 'SUPERVISOR' }));
+  const response = await POST(request());
+  expect(response.status).toBe(200);
+  expect(response.cookies.get('fieldops_refresh')).toMatchObject({ value: 'rotated', httpOnly: true });
+  expect(response.cookies.get('fieldops_access')?.maxAge).toBeLessThanOrEqual(600);
+  expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining('/auth/me'), expect.objectContaining({ headers: { Authorization: `Bearer ${token}` } }));
+});

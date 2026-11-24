@@ -14,9 +14,9 @@ export default function DashboardLayout({
         <Sidebar />
 
         <div className="min-w-0 flex-1 flex flex-col md:h-screen md:overflow-hidden">
-          <main className="min-w-0 flex-1 md:overflow-y-auto">
+          <div className="min-w-0 flex-1 md:overflow-y-auto">
             {children}
-          </main>
+          </div>
         </div>
       </div>
     </AdminWebGuard>

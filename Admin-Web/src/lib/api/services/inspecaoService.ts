@@ -1,5 +1,8 @@
 import apiClient from '../axios';
-import { getPageContent } from './apiPage';
+import { apiSearchTerm, collectPages, mapApiPage, matchesSearch, paginateList, type ApiPage } from './apiPage';
+import { clienteService } from './clienteService';
+import { equipamentoService } from './equipamentoService';
+import { localService } from './localService';
 
 export type InspecaoStatus = 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA';
 
@@ -14,11 +17,16 @@ export interface InspecaoDTO {
   equipamentoNome?: string;
   usuarioId: number;
   usuarioNome?: string;
+  statusApi?: ApiInspection['status'];
+  canceladoEm?: string;
+  canceladoPor?: number;
+  motivoCancelamento?: string;
 }
 
 export interface InspecaoRequest {
   descricao: string;
   dataAgendada: string; // ISO string e.g. "2026-08-31T14:30:00"
+  dataLimite?: string;
   observacoes?: string;
   equipamentoId: number;
   usuarioId: number;
@@ -28,23 +36,51 @@ export interface InspecaoRequest {
   prioridade?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 }
 
-interface ApiInspection {
+export interface ApiInspection {
   id: number;
   title: string;
-  status: 'DRAFT' | 'ASSIGNED' | 'IN_PROGRESS' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'CANCELED';
+  status: 'DRAFT' | 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELED';
   dueDate?: string;
   dueTime?: string;
   scheduledDate?: string;
+  equipmentId?: number;
   equipmentName?: string;
   technicianId?: number;
   technicianName?: string;
+  clientName?: string;
+  siteName?: string;
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  progress?: number;
+  overdue?: boolean;
+  instructions?: string;
+  completedAt?: string;
+  observations?: string;
+  templateId?: number;
+  templateVersion?: number;
+}
+
+interface ApiMainInspection {
+  id: number; descricao: string; status: 'AGENDADA' | 'PENDENTE' | 'EM_ANDAMENTO' | 'CONCLUIDA' | 'CANCELADA';
+  dataAgendada: string; dataLimite?: string; clienteNome?: string; localNome?: string; equipamentoNome?: string;
+  clienteId?: number; equipamentoId?: number;
+  usuarioId?: number; usuarioNome?: string; prioridade?: 'BAIXA' | 'MEDIA' | 'ALTA' | 'URGENTE'; instrucoes?: string;
+  dataRealizacao?: string; observacoes?: string; modeloId?: number; modeloVersao?: number;
+}
+
+export interface InspectionQuery {
+  page: number; size: number; name?: string; status?: ApiInspection['status'];
+  technicianName?: string; clientName?: string; priority?: ApiInspection['priority'];
+  sort?: string;
+}
+export interface InspectionAuditEvent {
+  id: number; actorId: number; action: string; detail?: string; occurredAt: string;
 }
 
 function fromApiInspection(inspection: ApiInspection): InspecaoDTO {
   const status: InspecaoStatus =
     inspection.status === 'DRAFT' || inspection.status === 'ASSIGNED'
       ? 'PENDENTE'
-      : inspection.status === 'IN_PROGRESS' || inspection.status === 'UNDER_REVIEW' || inspection.status === 'REJECTED'
+      : inspection.status === 'IN_PROGRESS'
         ? 'EM_ANDAMENTO'
         : inspection.status === 'CANCELED'
           ? 'CANCELADA'
@@ -55,27 +91,96 @@ function fromApiInspection(inspection: ApiInspection): InspecaoDTO {
     id: inspection.id,
     descricao: inspection.title,
     status,
+    statusApi: inspection.status,
     dataAgendada: inspection.dueTime && !scheduled.includes('T')
       ? `${scheduled}T${inspection.dueTime}`
       : scheduled,
-    equipamentoId: 0,
+    equipamentoId: inspection.equipmentId ?? 0,
     equipamentoNome: inspection.equipmentName,
     usuarioId: inspection.technicianId ?? 0,
     usuarioNome: inspection.technicianName,
   };
 }
 
-export interface InspecaoStatusUpdate {
-  status: InspecaoStatus;
-  observacoes?: string;
+async function completeEquipmentContext(inspection: ApiInspection, signal?: AbortSignal) {
+  if (!inspection.equipmentId || (inspection.siteName && inspection.clientName)) return inspection;
+
+  try {
+    const assets = await collectPages((page) => equipamentoService.listarPagina({ page, size: 100 }, signal));
+    const asset = assets.find((item) => item.id === inspection.equipmentId);
+    if (!asset?.localId) return inspection;
+
+    const sites = await collectPages((page) => localService.listarPagina({ page, size: 100 }, signal));
+    const site = sites.find((item) => item.id === asset.localId);
+    const context = {
+      ...inspection,
+      equipmentName: inspection.equipmentName || asset.nome,
+      siteName: inspection.siteName || site?.nome || asset.localNome,
+      clientName: inspection.clientName || site?.clienteNome,
+    };
+    if (!context.clientName && site?.clienteId && !signal?.aborted) {
+      const client = await clienteService.buscarPorId(site.clienteId, signal).catch(() => undefined);
+      context.clientName = client?.nome;
+    }
+    return context;
+  } catch {
+    // O cadastro do equipamento é complementar ao registro da inspeção.
+    return inspection;
+  }
 }
 
 export const inspecaoService = {
+  async listarPagina(query: InspectionQuery, signal?: AbortSignal): Promise<ApiPage<ApiInspection>> {
+    const statuses: Record<ApiInspection['status'], ApiMainInspection['status']> = { DRAFT: 'PENDENTE', ASSIGNED: 'AGENDADA', IN_PROGRESS: 'EM_ANDAMENTO', COMPLETED: 'CONCLUIDA', CANCELED: 'CANCELADA' };
+    const priorities = { LOW: 'BAIXA', MEDIUM: 'MEDIA', HIGH: 'ALTA', CRITICAL: 'URGENTE' } as const;
+    const response = await apiClient.get<ApiPage<ApiMainInspection> | ApiMainInspection[]>('/inspecoes', { params: {
+      page: query.page, size: query.size, termo: apiSearchTerm(query.name), ...(query.sort ? { sort: query.sort } : {}),
+      status: query.status ? statuses[query.status] : undefined,
+      usuarioId: query.technicianName ? Number(query.technicianName) : undefined,
+      clienteId: query.clientName ? Number(query.clientName) : undefined,
+      prioridade: query.priority ? priorities[query.priority] : undefined,
+    }, signal });
+    const statusMap: Record<ApiMainInspection['status'], ApiInspection['status']> = { PENDENTE: 'DRAFT', AGENDADA: 'ASSIGNED', EM_ANDAMENTO: 'IN_PROGRESS', CONCLUIDA: 'COMPLETED', CANCELADA: 'CANCELED' };
+    const priorityMap = { BAIXA: 'LOW', MEDIA: 'MEDIUM', ALTA: 'HIGH', URGENTE: 'CRITICAL' } as const;
+    const { data } = response;
+    let page: ApiPage<ApiMainInspection>;
+    if (Array.isArray(data)) {
+      const inspections = data.filter((item) =>
+        (!query.status || item.status === statuses[query.status]) &&
+        (!query.technicianName || item.usuarioId === Number(query.technicianName)) &&
+        (!query.clientName || item.clienteId === Number(query.clientName)) &&
+        (!query.priority || item.prioridade === priorities[query.priority]) &&
+        matchesSearch(query.name, item.descricao));
+      if (query.sort === 'id,desc') inspections.sort((a, b) => b.id - a.id);
+      page = paginateList(inspections, query);
+    } else {
+      page = data;
+    }
+    return mapApiPage(page, (item) => ({ id: item.id, title: item.descricao, status: statusMap[item.status],
+      scheduledDate: item.dataAgendada, dueDate: item.dataLimite, clientName: item.clienteNome, siteName: item.localNome,
+      equipmentId: item.equipamentoId, equipmentName: item.equipamentoNome, technicianId: item.usuarioId, technicianName: item.usuarioNome,
+      priority: item.prioridade ? priorityMap[item.prioridade] : undefined, instructions: item.instrucoes,
+      completedAt: item.dataRealizacao, observations: item.observacoes, templateId: item.modeloId, templateVersion: item.modeloVersao,
+      overdue: !!item.dataLimite && !['CONCLUIDA', 'CANCELADA'].includes(item.status) && new Date(item.dataLimite).getTime() < Date.now() }));
+  },
+  // A API main ainda não expõe GET /inspecoes/{id} para gestores.
+  // Percorre as páginas até localizar o registro, sem presumir que está na primeira.
+  async buscarPorId(id: number, signal?: AbortSignal): Promise<ApiInspection> {
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error('Identificador de inspeção inválido.');
+    let page = 0;
+    let pages = 1;
+    while (page < pages) {
+      const result = await this.listarPagina({ page, size: 100, sort: 'id,desc' }, signal);
+      if (result.number !== page) throw new Error('A API retornou uma página diferente da solicitada.');
+      const inspection = result.content.find((item) => item.id === id);
+      if (inspection) return completeEquipmentContext(inspection, signal);
+      pages = result.totalPages;
+      page += 1;
+    }
+    throw new Error('Inspeção não encontrada ou sem acesso.');
+  },
   async listarTodas(): Promise<InspecaoDTO[]> {
-    const response = await apiClient.get<ApiInspection[] | { content?: ApiInspection[] }>('/inspections', {
-      params: { size: 200 },
-    });
-    return getPageContent(response.data).map(fromApiInspection);
+    return (await collectPages((page) => this.listarPagina({ page, size: 100 }))).map(fromApiInspection);
   },
 
   async listarPorUsuario(usuarioId: number): Promise<InspecaoDTO[]> {
@@ -86,33 +191,54 @@ export const inspecaoService = {
     if (!data.clienteId || !data.localId || !data.templateVersionId) {
       throw new Error('Cliente, local e versão publicada do modelo são obrigatórios para criar uma inspeção.');
     }
+    if (!data.equipamentoId) throw new Error('Selecione um equipamento para a inspeção.');
 
-    const dateTime = data.dataAgendada.replace(' ', 'T');
-    const [dueDate, dueTime] = dateTime.split('T');
-    const response = await apiClient.post<ApiInspection>('/inspections', {
-      title: data.descricao,
-      templateVersionId: data.templateVersionId,
-      clientId: data.clienteId,
-      siteId: data.localId,
-      equipmentId: data.equipamentoId,
-      technicianId: data.usuarioId,
-      priority: data.prioridade ?? 'MEDIUM',
-      dueDate,
-      dueTime,
-      supervisorInstructions: data.observacoes,
-    });
-    return fromApiInspection(response.data);
-  },
-
-  async atualizarStatus(id: number, data: InspecaoStatusUpdate): Promise<InspecaoDTO> {
-    if (data.status !== 'CANCELADA') {
-      throw new Error('A API atual só permite cancelar inspeções por esta ação.');
+    if (!data.descricao.trim() || data.descricao.trim().length > 300) {
+      throw new Error('Informe um título com até 300 caracteres.');
+    }
+    if ((data.observacoes?.trim().length ?? 0) > 2000) {
+      throw new Error('As instruções devem ter até 2000 caracteres.');
+    }
+    const deadline = new Date(data.dataAgendada);
+    if (!Number.isFinite(deadline.getTime()) || deadline.getTime() <= Date.now()) {
+      throw new Error('Informe uma data agendada futura válida.');
     }
 
-    const match = data.observacoes?.match(/\[Cancelamento:\s*([^\]]+)\]/);
-    const response = await apiClient.post<ApiInspection>(`/inspections/${id}/cancel`, {
-      reason: match?.[1] ?? data.observacoes ?? 'Cancelado pelo administrador',
+    const dateTime = data.dataAgendada.replace(' ', 'T');
+    if (data.dataLimite) {
+      const dueDate = new Date(data.dataLimite);
+      if (!Number.isFinite(dueDate.getTime()) || dueDate.getTime() < deadline.getTime()) {
+        throw new Error('O prazo deve ser igual ou posterior à data agendada.');
+      }
+    }
+    const priorities = { LOW: 'BAIXA', MEDIUM: 'MEDIA', HIGH: 'ALTA', CRITICAL: 'URGENTE' } as const;
+    const response = await apiClient.post<Omit<InspecaoDTO, 'status'> & { status: InspecaoStatus | 'AGENDADA' }>('/inspecoes', {
+      descricao: data.descricao.trim(),
+      modeloId: data.templateVersionId,
+      clienteId: data.clienteId,
+      localId: data.localId,
+      equipamentoId: data.equipamentoId,
+      usuarioId: data.usuarioId,
+      prioridade: priorities[data.prioridade ?? 'MEDIUM'],
+      dataAgendada: dateTime,
+      dataLimite: data.dataLimite?.replace(' ', 'T') || undefined,
+      instrucoes: data.observacoes?.trim() || undefined,
     });
-    return fromApiInspection(response.data);
+    return { ...response.data, status: response.data.status === 'AGENDADA' ? 'PENDENTE' : response.data.status };
+  },
+
+  async cancelar(id: number, reason: string): Promise<InspecaoDTO> {
+    const motivo = reason.trim();
+    if (!motivo || motivo.length > 1000) throw new Error('Informe um motivo com até 1000 caracteres.');
+    const response = await apiClient.patch<InspecaoDTO>(`/inspecoes/${id}/cancelar`, { motivo });
+    return response.data;
+  },
+  async atualizarPlanejamento(id: number, data: { priority: NonNullable<ApiInspection['priority']>; dueDate: string; instructions: string }): Promise<InspecaoDTO> {
+    const priorities = { LOW: 'BAIXA', MEDIUM: 'MEDIA', HIGH: 'ALTA', CRITICAL: 'URGENTE' } as const;
+    if (data.dueDate && !Number.isFinite(new Date(data.dueDate).getTime())) throw new Error('Informe um prazo válido.');
+    if (data.instructions.length > 2000) throw new Error('As instruções devem ter até 2000 caracteres.');
+    return (await apiClient.patch<InspecaoDTO>(`/inspecoes/${id}/planejamento`, {
+      prioridade: priorities[data.priority], dataLimite: data.dueDate || null, instrucoes: data.instructions.trim() || null,
+    })).data;
   },
 };

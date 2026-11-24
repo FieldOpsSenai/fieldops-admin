@@ -80,7 +80,6 @@ const PUBLISHABLE_RESPONSE_TYPES: ResponseType[] = [
   'YES_NO',
   'NUMERIC',
   'DATE',
-  'SINGLE_SELECT',
   'BOOLEAN',
 ];
 
@@ -138,7 +137,7 @@ function createDefaultItem(
     responseType:
       'BOOLEAN',
     required: true,
-    allowObservation: true,
+    allowObservation: false,
     requireEvidenceOnNonConformity:
       true,
     order,
@@ -570,7 +569,20 @@ export default function TemplatesPage() {
     );
   };
 
-  const handleDuplicate = (template: InspectionTemplate) => {
+  const handleDuplicate = async (template: InspectionTemplate) => {
+    if (template.status === 'PUBLICADO') {
+      try {
+        const draft = await modeloInspecaoService.novaVersao(template.id);
+        setTemplates((current) => [draft, ...current]);
+        handleOpenEdit(draft);
+        // A API atual omite evidenciaObrigatoria ao copiar uma versão.
+        // A árvore publicada é imutável e serve de origem para o editor;
+        // o próximo PUT salva todas as regras no ID do novo rascunho.
+        setFormSections(cloneSections(template.sections));
+        showToast(`Versão ${draft.version} criada. Revise e salve o rascunho para confirmar todas as regras copiadas.`);
+      } catch (error) { showToast(getApiErrorMessage(error, 'Não foi possível criar uma nova versão.')); }
+      return;
+    }
     handleOpenNewEditor();
     setFormTitle(`${template.title} (Cópia)`);
     setFormDescription(template.description);
@@ -581,8 +593,13 @@ export default function TemplatesPage() {
     })));
   };
 
-  const handleDelete = () => {
-    showToast('A exclusão de modelos ainda não está disponível. O rascunho foi mantido.');
+  const handleDelete = async (template: InspectionTemplate) => {
+    if (template.status !== 'RASCUNHO' || !window.confirm(`Excluir o rascunho "${template.title}"?`)) return;
+    try {
+      await modeloInspecaoService.excluir(template.id);
+      setTemplates((current) => current.filter((item) => item.id !== template.id));
+      showToast('Rascunho excluído.');
+    } catch (error) { showToast(getApiErrorMessage(error, 'Não foi possível excluir o rascunho.')); }
   };
 
   const handleAddSection =
@@ -695,11 +712,6 @@ export default function TemplatesPage() {
         formSections[
           sectionIndex
         ];
-
-      if (/^\d+$/.test(section.items[itemIndex].id)) {
-        setEditorError('A exclusão de itens já salvos ainda não está disponível.');
-        return;
-      }
 
       if (
         section.items.length ===
@@ -982,6 +994,7 @@ export default function TemplatesPage() {
     if (statusToSave === 'PUBLICADO') {
       const errors = validateTemplateForPublish(formTitle, formCategory, sections);
       if (errors.length) { setEditorError(errors.join(' ')); return; }
+      if (!window.confirm('Publicar este modelo? A versão publicada ficará imutável.')) return;
     }
     savingRef.current = true;
     setIsSaving(true);
@@ -1004,7 +1017,7 @@ export default function TemplatesPage() {
       setIsEditorOpen(false);
     } catch (error) {
       setFormSections(data.sections);
-      setEditorError(getApiErrorMessage(error, 'Não foi possível salvar o modelo. As alterações confirmadas foram mantidas; tente novamente.'));
+      setEditorError(getApiErrorMessage(error, 'Não foi possível salvar o modelo. Os valores do formulário foram mantidos; tente novamente.'));
     } finally {
       savingRef.current = false;
       setIsSaving(false);
@@ -1102,7 +1115,7 @@ export default function TemplatesPage() {
 
             <p className="text-xs text-amber-800 mt-1 leading-5">
               {isApiListAvailable
-                ? 'Rascunhos são salvos e podem ser editados. Use Copiar para preparar um novo rascunho a partir de qualquer modelo. A exclusão de modelos e de itens já salvos ainda não está disponível.'
+                ? 'Rascunhos, seções e itens são salvos na API. A API atual não armazena descrição do modelo nem opções de seleção.'
                 : 'Não foi possível carregar os modelos. Tente novamente para consultar os dados salvos.'}
             </p>
           </div>
@@ -1331,7 +1344,7 @@ export default function TemplatesPage() {
                     )
                   }
                   onDelete={() =>
-                    handleDelete()
+                    handleDelete(template)
                   }
                 />
               )
@@ -1484,7 +1497,7 @@ export default function TemplatesPage() {
                                   )
                                 }
                                 className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded"
-                                title="Duplicar como rascunho"
+                                title={isPublished ? 'Criar nova versão' : 'Duplicar como rascunho'}
                               >
                                 <Copy
                                   size={
@@ -1497,10 +1510,10 @@ export default function TemplatesPage() {
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    handleDelete()
+                                    handleDelete(template)
                                   }
                                   className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
-                                  disabled title="Exclusão de rascunhos indisponível"
+                                  title="Excluir rascunho"
                                 >
                                   <Trash2
                                     size={
@@ -1535,15 +1548,7 @@ export default function TemplatesPage() {
               </h3>
 
               <p className="text-xs text-slate-600 leading-5 mt-1">
-                Rascunhos recém-criados
-                podem ser publicados.
-                Depois da publicação,
-                a versão passa a ser
-                somente leitura. Edição
-                e criação de novas versões
-                de modelos existentes
-                ainda não estão disponíveis
-                neste editor.
+                Rascunhos podem ser editados e publicados. Uma nova versão parte do modelo publicado e preserva o original; a API cria um novo registro para o rascunho.
               </p>
             </div>
           </div>
@@ -1552,6 +1557,7 @@ export default function TemplatesPage() {
 
       {previewTemplate && (
         <PreviewModal
+          unsaved={isEditorOpen}
           template={
             previewTemplate
           }
@@ -1561,6 +1567,7 @@ export default function TemplatesPage() {
             )
           }
           onEdit={() => {
+            if (isEditorOpen) { setPreviewTemplate(null); return; }
             const target =
               previewTemplate;
 
@@ -1584,8 +1591,13 @@ export default function TemplatesPage() {
         />
       )}
 
-      {isEditorOpen && (
+      {isEditorOpen && !previewTemplate && (
         <EditorModal isSaving={isSaving}
+          onPreview={() => setPreviewTemplate({
+            id: editingTemplate?.id ?? 'prévia', title: formTitle, description: formDescription,
+            category: formCategory, sections: normalizeOrders(cloneSections(formSections)), status: 'RASCUNHO',
+            version: editingTemplate?.version ?? 1, createdAt: '', updatedAt: '',
+          })}
           editingTemplate={
             editingTemplate
           }
@@ -1854,7 +1866,7 @@ function TemplateCard({
               onDuplicate
             }
             className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-200 rounded"
-            title="Duplicar como rascunho"
+            title={isPublished ? 'Criar nova versão' : 'Duplicar como rascunho'}
           >
             <Copy size={15} />
           </button>
@@ -1866,7 +1878,7 @@ function TemplateCard({
                 onDelete
               }
               className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
-              disabled title="Exclusão de rascunhos indisponível"
+              title="Excluir rascunho"
             >
               <Trash2
                 size={15}
@@ -1880,11 +1892,13 @@ function TemplateCard({
 }
 
 function PreviewModal({
+  unsaved,
   template,
   onClose,
   onEdit,
   onDuplicate,
 }: {
+  unsaved: boolean;
   template: InspectionTemplate;
   onClose: () => void;
   onEdit: () => void;
@@ -1895,7 +1909,7 @@ function PreviewModal({
     'PUBLICADO';
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/60 p-4 flex items-center justify-center">
+    <div role="dialog" aria-modal="true" aria-label="Prévia do modelo" className="fixed inset-0 z-50 bg-slate-950/60 p-4 flex items-center justify-center">
       <div className="bg-white w-full max-w-4xl max-h-[92vh] rounded-xl shadow-2xl overflow-hidden flex flex-col">
         <header className="p-5 bg-slate-50 border-b border-slate-200 flex items-start justify-between gap-4">
           <div>
@@ -1944,6 +1958,17 @@ function PreviewModal({
         </header>
 
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          {unsaved && <p className="text-sm text-teal-800 bg-teal-50 p-3 rounded">Prévia das alterações em edição. Nenhum dado foi salvo ou publicado.</p>}
+          {!!template.publishedVersions?.length && (
+            <section aria-label="Versões publicadas" className="border rounded-lg p-4 space-y-2">
+              <h3 className="font-semibold">Versões publicadas</h3>
+              <ul className="space-y-2 text-sm">
+                {[...template.publishedVersions].sort((a, b) => b.versionNumber - a.versionNumber).map((version) => (
+                  <li key={version.id}>v{version.versionNumber} · ID {version.id} · {version.titleSnapshot ?? template.title} · {formatDate(version.publishedAt)}{version.publishedBy ? ` · Usuário #${version.publishedBy}` : ''}</li>
+                ))}
+              </ul>
+            </section>
+          )}
           <section>
             <h3 className="text-xs uppercase tracking-wider font-bold text-slate-500">
               Descrição
@@ -2059,7 +2084,7 @@ function PreviewModal({
 
                                     {item.requireEvidenceOnNonConformity && (
                                       <span className="px-2 py-0.5 rounded bg-amber-50 text-[11px] font-semibold text-amber-700">
-                                        Evidência obrigatória em não conformidade
+                                        Evidência obrigatória
                                       </span>
                                     )}
                                   </div>
@@ -2097,8 +2122,7 @@ function PreviewModal({
                   size={15}
                 />
 
-                Usar como base para
-                novo rascunho
+                Criar nova versão em rascunho
               </button>
             ) : (
               <button
@@ -2112,7 +2136,7 @@ function PreviewModal({
                   size={15}
                 />
 
-                Editar rascunho
+                {unsaved ? 'Voltar à edição' : 'Editar rascunho'}
               </button>
             )}
           </div>
@@ -2180,9 +2204,9 @@ function ResponsePreview({
 
     case 'SINGLE_SELECT':
       return (
-        <div className="w-44 px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-400">
-          Selecionar opção...
-        </div>
+        <ul aria-label="Opções de resposta" className="min-w-44 px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-600 space-y-2">
+          {item.options?.map((option) => <li key={option.id}>○ {option.label}</li>)}
+        </ul>
       );
 
     case 'MULTI_SELECT':
@@ -2198,6 +2222,7 @@ function ResponsePreview({
 }
 
 type EditorModalProps = {
+  onPreview: () => void;
   isSaving: boolean;
   editingTemplate:
     | InspectionTemplate
@@ -2286,6 +2311,7 @@ type EditorModalProps = {
 };
 
 function EditorModal({
+  onPreview,
   isSaving,
   editingTemplate,
   formTitle,
@@ -2311,10 +2337,17 @@ function EditorModal({
   onSaveDraft,
   onPublish,
 }: EditorModalProps) {
+  const checklistHeading = useRef<HTMLHeadingElement>(null);
+
+  function goToChecklist() {
+    checklistHeading.current?.focus({ preventScroll: true });
+    checklistHeading.current?.scrollIntoView({ block: 'start' });
+  }
+
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/60 p-4 flex items-center justify-center">
-      <div className="bg-white w-full max-w-5xl max-h-[94vh] rounded-xl shadow-2xl overflow-hidden flex flex-col">
-        <header className="p-5 md:p-6 bg-slate-50 border-b border-slate-200 flex items-start justify-between gap-4">
+    <div className="fixed inset-0 z-50 bg-slate-950/60 p-2 sm:p-4 flex items-center justify-center">
+      <div className="bg-white w-full max-w-5xl max-h-full rounded-xl shadow-2xl overflow-hidden flex flex-col">
+        <header className="p-4 md:p-6 bg-slate-50 border-b border-slate-200 shrink-0 flex items-start justify-between gap-2">
           <div>
             <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
               <FileText
@@ -2333,6 +2366,13 @@ function EditorModal({
               seções, itens e regras
               de resposta.
             </p>
+            <button
+              type="button"
+              onClick={goToChecklist}
+              className="mt-2 rounded border border-teal-300 bg-teal-50 px-3 py-1.5 text-sm font-semibold text-teal-800 hover:bg-teal-100"
+            >
+              Ir para o checklist ↓
+            </button>
           </div>
 
           <button
@@ -2346,7 +2386,8 @@ function EditorModal({
           </button>
         </header>
 
-        <fieldset disabled={isSaving} className="p-5 md:p-6 overflow-y-auto flex-1 space-y-6">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <fieldset disabled={isSaving} className="min-w-0 p-4 md:p-6 space-y-6">
           {editorError && (
             <div role="alert" className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3 text-sm text-red-700">
               <AlertTriangle
@@ -2416,6 +2457,7 @@ function EditorModal({
                   }
                   className="w-full py-2 px-3 border border-slate-300 rounded-lg bg-white text-sm"
                 >
+                  {!CATEGORIES.includes(formCategory) && formCategory && <option value={formCategory}>{formCategory}</option>}
                   {CATEGORIES.map(
                     (
                       category
@@ -2454,7 +2496,7 @@ function EditorModal({
                 instruções gerais
               </label>
 
-              <textarea
+              <textarea disabled aria-label="Descrição indisponível na API"
                 rows={3}
                 value={
                   formDescription
@@ -2467,7 +2509,7 @@ function EditorModal({
                       .value
                   )
                 }
-                placeholder="Descreva o objetivo, escopo ou instruções do modelo..."
+                placeholder="Descrição indisponível na API atual"
                 className="w-full py-2 px-3 border border-slate-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#10b981]"
               />
             </div>
@@ -2476,7 +2518,7 @@ function EditorModal({
           <section className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+                <h3 ref={checklistHeading} tabIndex={-1} className="scroll-mt-4 text-sm font-bold text-slate-800 uppercase tracking-wide">
                   2. Estrutura do
                   checklist
                 </h3>
@@ -2650,13 +2692,15 @@ function EditorModal({
             )}
           </section>
         </fieldset>
+        </div>
 
-        <footer className="p-4 md:px-6 bg-slate-50 border-t border-slate-200 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3">
-          <p className="text-[11px] text-slate-500 max-w-xl">
+        <footer className="p-3 md:px-6 bg-slate-50 border-t border-slate-200 shrink-0 flex flex-col-reverse lg:flex-row lg:items-center lg:justify-between gap-3">
+          <p className="hidden lg:block text-[11px] text-slate-500 max-w-xl">
             Publicar valida a estrutura, envia seções e itens à API e torna a versão somente leitura.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="grid grid-cols-2 sm:flex sm:justify-end gap-2">
+            <button type="button" disabled={isSaving} onClick={onPreview} className="px-4 py-2 border border-teal-300 text-teal-800 rounded-lg text-sm font-semibold">Prévia do checklist</button>
             <button
               type="button" disabled={isSaving}
               onClick={
@@ -2755,7 +2799,7 @@ function ItemEditor({
           <input
             type="text"
             aria-label={`Enunciado do item ${sectionIndex + 1}.${itemIndex + 1}`}
-            maxLength={500}
+            maxLength={255}
             value={
               item.label
             }
@@ -2865,30 +2909,8 @@ function ItemEditor({
           </label>
 
           <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-            <input
-              type="checkbox"
-              checked={
-                item.allowObservation
-              }
-              onChange={(
-                event
-              ) =>
-                onUpdate(
-                  (
-                    current
-                  ) => ({
-                    ...current,
-
-                    allowObservation:
-                      event.target
-                        .checked,
-                  })
-                )
-              }
-              className="accent-[#0f766e]"
-            />
-
-            Exigir observação em não conformidade
+            <input type="checkbox" checked={item.critical ?? false} onChange={(event) => onUpdate((current) => ({ ...current, critical: event.target.checked }))} className="accent-[#0f766e]" />
+            Item crítico
           </label>
 
           <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
@@ -2915,14 +2937,13 @@ function ItemEditor({
               className="accent-[#0f766e]"
             />
 
-            Exigir evidência em
-            não conformidade
+            Exigir evidência
           </label>
         </div>
       </div>
 
       <p className="text-xs text-slate-500">
-        As regras de observação e evidência são exigidas quando a resposta indica não conformidade.
+        A evidência obrigatória é exigida para o item, independentemente do resultado.
         A resposta obrigatória é uma regra independente.
       </p>
 

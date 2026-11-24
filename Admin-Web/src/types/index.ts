@@ -77,6 +77,7 @@ export interface TemplateItem {
   responseType: ResponseType;
   options?: TemplateOption[];
   required: boolean;
+  critical?: boolean;
   /** API observationRequiredOnFailure: exige observação em não conformidade. */
   allowObservation: boolean;
   requireEvidenceOnNonConformity: boolean;
@@ -90,6 +91,14 @@ export interface TemplateSection {
   items: TemplateItem[];
 }
 
+export interface TemplateVersion {
+  id: number;
+  versionNumber: number;
+  publishedAt?: string;
+  publishedBy?: number;
+  titleSnapshot?: string;
+}
+
 export interface Template {
   id: string;
   title: string;
@@ -100,6 +109,7 @@ export interface Template {
   updatedAt: string;
   publishedAt?: string;
   publishedBy?: string;
+  publishedVersions?: TemplateVersion[];
 }
 
 // Inspections

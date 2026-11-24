@@ -80,12 +80,14 @@ O cliente HTTP envia o JWT no cabeçalho `Authorization: Bearer`. A rota `src/ap
 | Comando                | Ação                                          |
 | ---------------------- | --------------------------------------------- |
 | `npm run dev`          | Inicia o servidor de desenvolvimento.         |
+| `npm run dev:docker`   | Inicia uma instância separada em `http://127.0.0.1:3001`, apontando para a API local do Docker na porta 8080. |
 | `npm run build`        | Gera a versão de produção.                    |
 | `npm run start`        | Inicia a versão de produção já compilada.     |
 | `npm run lint`         | Executa o ESLint.                             |
 | `npm run format`       | Formata os arquivos suportados pelo Prettier. |
 | `npm run format:check` | Verifica a formatação sem alterar arquivos.   |
 | `npm test`             | Executa os testes Jest.                       |
+| `npm run test:browser` | Abre as telas no Chromium com respostas simuladas e verifica acessibilidade com axe. Requer `npm run build` antes. |
 
 O Prettier está fixado em `package.json` e `package-lock.json`. `.prettierignore` exclui dependências, artefatos gerados e o lockfile.
 
@@ -99,7 +101,18 @@ O Prettier está fixado em `package.json` e `package-lock.json`. `.prettierignor
 - `src/stores/`: estado de sessão.
 - `src/types/`: tipos compartilhados.
 
-As rotas `/clients`, `/sites` e `/equipment` reutilizam `ClientsHierarchyManager`, com navegação paginada entre clientes, locais e equipamentos. `/settings` redireciona para `/clients`; `/users` mantém sua tela própria de gerenciamento. O dashboard fica em `/dashboard`, os modelos em `/inspection-templates` e o agendamento em `/inspections/new`.
+As rotas `/clients`, `/sites` e `/equipment` reutilizam `ClientsHierarchyManager`, com navegação paginada entre clientes, locais e equipamentos. `/settings` redireciona para `/clients`; `/users` mantém sua tela própria de gerenciamento. O dashboard fica em `/dashboard`, os modelos em `/inspection-templates`, o agendamento em `/inspections/new` e o detalhe/revisão em `/inspections/[id]`.
+
+### Documentação
+
+| Documento | Conteúdo |
+| --- | --- |
+| [docs/ARQUITETURA.md](docs/ARQUITETURA.md) | Arquitetura, decisões e guia de explicação do código. |
+| [docs/INTEGRACAO.md](docs/INTEGRACAO.md) | Contrato atual com a API (inspeções, revisão, estados). |
+| [docs/MODELOS-INTEGRACAO.md](docs/MODELOS-INTEGRACAO.md) | Integração do construtor de modelos. |
+| [docs/SESSAO-WEB.md](docs/SESSAO-WEB.md) | Sessão, cookies HttpOnly e renovação. |
+| [docs/PENDENCIAS-API.md](docs/PENDENCIAS-API.md) | Limitações conhecidas que dependem da API. |
+| [docs/DEMONSTRACAO.md](docs/DEMONSTRACAO.md) | Roteiro da demonstração ponta a ponta. |
 
 ## Convenções
 
@@ -133,8 +146,8 @@ O fluxo padrão é:
 
     branch → commit → push → Pull Request → review → aprovação → squash merge
 
-Consulte `docs/CONTRIBUTING.md` para as regras completas de contribuição.
+Consulte [docs/CONTRIBUTING.md](../docs/CONTRIBUTING.md) para as regras completas de contribuição.
 
 ## Status
 
-O painel possui estrutura Next.js, rotas administrativas, autenticação, integração com a API Java e ferramentas de lint e formatação.
+Fluxo administrativo integrado à API Java: autenticação com cookies HttpOnly e guards por perfil, cadastros (usuários, clientes, locais, equipamentos com QR Code), construtor de modelos versionados, planejamento e acompanhamento de inspeções, e revisão com aprovação ou reprovação. Lint, TypeScript, testes Jest e build de produção passam.
